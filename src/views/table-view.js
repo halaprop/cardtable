@@ -141,6 +141,7 @@ export class TableView {
       // Remove extra cards, add new ones
       imgs.slice(player.cards.length).forEach(el => el.remove())
       if (player.cards.length > imgs.length) {
+        if (imgs.length === 0) cardContainer.innerHTML = ''
         player.cards.slice(imgs.length).forEach((card, i) => {
           cardContainer.insertAdjacentHTML('beforeend',
             this._cardHTML(player.uid, card, imgs.length + i, isMe))
@@ -221,8 +222,8 @@ export class TableView {
           ${this._dealBtns(player.uid)}
             ${isMyTurn  ? '<span class="turn-pip uk-margin-small-right" title="Your turn">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
             ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" title="Dealer button">D</span>' : ''}
-            ${isDealer  ? '<span class="uk-text-muted uk-margin-small-right uk-text-small" title="Dealer">(deal)</span>' : ''}
             <span class="uk-text-bold player-name">${player.name}</span>
+            ${isDealer  ? '<span class="uk-text-muted uk-margin-small-left uk-text-small">(host)</span>' : ''}
           </div>
           <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
             ${this._cardsHTML(player.uid, player.cards, isMe)}
@@ -239,8 +240,10 @@ export class TableView {
   }
 
   _cardsHTML(uid, cards, isMe) {
-    if (!cards?.length) return '<span class="uk-text-muted uk-text-small">no cards</span>'
-    return `<span class="player-cards">${cards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')}</span>`
+    const inner = cards?.length
+      ? cards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')
+      : '<span class="uk-text-muted uk-text-small">no cards</span>'
+    return `<span class="player-cards">${inner}</span>`
   }
 
   _cardHTML(uid, card, i, isMe) {
@@ -390,7 +393,7 @@ export class TableView {
   _playerControlsHTML() {
     return `
       <div class="uk-margin-top">
-        <button class="uk-button uk-button-default uk-button-small" data-action="usurp">I'm the captain now...</button>
+        <button class="uk-button uk-button-secondary uk-button-small" data-action="usurp">I'm the captain now...</button>
       </div>
     `
   }
