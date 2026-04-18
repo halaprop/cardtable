@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Card Table</title>
+
+  <!-- UIkit -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/uikit@3.21.0/dist/css/uikit.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/uikit@3.21.0/dist/js/uikit.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/uikit@3.21.0/dist/js/uikit-icons.min.js"></script>
+
+  <!-- Appwrite -->
+  <script src="https://cdn.jsdelivr.net/npm/appwrite@16.0.2/dist/iife/sdk.min.js"></script>
+
+  <link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+
+  <!-- Login -->
+  <div id="view-login" class="view" hidden>
+    <div class="uk-flex uk-flex-center uk-flex-middle uk-height-viewport">
+      <div class="uk-card uk-card-default uk-card-body uk-width-medium">
+        <h3 class="uk-card-title uk-text-center">Card Table</h3>
+        <form id="login-form">
+          <div class="uk-margin">
+            <input id="login-email" class="uk-input" type="email" placeholder="Email" required>
+          </div>
+          <div class="uk-margin">
+            <input id="login-password" class="uk-input" type="password" placeholder="Password" required>
+          </div>
+          <button class="uk-button uk-button-primary uk-width-1-1" type="submit">Sign In</button>
+          <p id="login-error" class="uk-text-danger uk-text-small uk-margin-small-top" hidden></p>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lobby -->
+  <div id="view-lobby" class="view" hidden>
+    <div class="uk-container uk-margin-top">
+      <div class="uk-flex uk-flex-between uk-flex-middle uk-margin-bottom">
+        <h2 class="uk-heading-small uk-margin-remove">Tables</h2>
+        <div>
+          <button id="new-table-btn" class="uk-button uk-button-primary uk-button-small">New Table</button>
+          <button id="logout-btn" class="uk-button uk-button-default uk-button-small uk-margin-small-left">Sign Out</button>
+        </div>
+      </div>
+      <div id="tables-list"></div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div id="view-table" class="view" hidden>
+    <div id="table-root"></div>
+  </div>
+
+  <!-- Debug overlay -->
+  <div id="debug-overlay" hidden>
+    <div id="debug-content"></div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
