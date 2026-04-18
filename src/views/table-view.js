@@ -311,6 +311,8 @@ export class TableView {
 
   _userActionsHTML(player) {
     const selected = this._selectedCards[player.uid]?.size ?? 0
+    const s = this.state
+    const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
     return `
       <div class="uk-flex uk-flex-between uk-flex-middle" style="gap:6px">
         <div class="uk-flex" style="gap:6px">
@@ -319,7 +321,7 @@ export class TableView {
           <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
         </div>
         <div class="uk-flex uk-flex-middle" style="gap:6px">
-          <button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>
+          ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
           <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}">Stand Up</button>
         </div>
       </div>
@@ -543,11 +545,12 @@ export class TableView {
       const hasPassing  = !diceGame && document.getElementById('ng-pass').checked
       const hasHiLo     = !diceGame && document.getElementById('ng-hilo').checked
       const hasHiLoBoth = !diceGame && document.getElementById('ng-hilob').checked
+      const allowBuyIn  = document.getElementById('ng-buyin').checked
       modal.hide()
       submit.removeEventListener('click', handler)
       diceEl.removeEventListener('change', syncDice)
       this._mutate(() => TableMutations.startGame(this.tableId, {
-        gameName: name, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth,
+        gameName: name, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth, allowBuyIn,
         button: this.state.button, requests: [],
       }))
     }

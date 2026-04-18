@@ -32,7 +32,7 @@ export async function createTable(name, creatorUid) {
     name, gameOn: false, gameName: '', diceGame: false,
     pot: 0, dealer: creatorUid, button: creatorUid, bigBlind: 0,
     lastAction: '', players: [], deck: [], cards: [], round: null,
-    hasPassing: false, hasHiLo: false, hasHiLoBoth: false,
+    hasPassing: false, hasHiLo: false, hasHiLoBoth: false, allowBuyIn: false,
   })
   return databases.createDocument(DB_ID, TABLES_COLLECTION, 'unique()', doc)
 }
