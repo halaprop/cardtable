@@ -208,5 +208,6 @@
   border: none;
 }
 
+.table-info-card .uk-text-muted { color: rgba(255,255,255,0.7) !important; }
 .dealer-panel .uk-text-muted { color: #aaa !important; }
 

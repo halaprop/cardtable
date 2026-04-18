@@ -175,10 +175,10 @@ export class TableView {
       <div class="uk-card uk-card-body uk-padding-small table-info-card">
         <div class="uk-flex uk-flex-between uk-flex-middle">
           <div>
-            <span class="uk-text-large uk-text-bold uk-text-white">${s.name}</span>
+            <span class="uk-text-large uk-text-bold" style="color:#fff">${s.name}</span>
             <span class="uk-text-muted uk-margin-small-left">${gameLine}</span>
           </div>
-          <div class="uk-text-white">
+          <div style="color:#fff">
             Pot: <strong>${s.pot}</strong>
           </div>
         </div>
