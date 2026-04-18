@@ -82,6 +82,11 @@
 .player-row-turn  { border-left-color: #f0a500 !important; }
 .player-row-folded { opacity: 0.45; }
 
+.player-row-main  { width: 100%; }
+.player-row-left  { flex: 1; min-width: 0; }
+.player-row-center { flex: 2; justify-content: center; }
+.player-row-right { flex: 1; justify-content: flex-end; }
+
 .player-name { font-size: 1.1em; }
 
 .turn-pip       { color: #f0a500; font-size: 1.2em; line-height: 1; }
@@ -119,20 +124,37 @@
   padding-top: 8px;
 }
 
+/* Card slot — wrapper that collapses on discard */
+.card-slot {
+  display: inline-block;
+  vertical-align: middle;
+  flex-shrink: 0;
+  margin-right: 3px;
+}
+
 /* Cards in hand */
 .card-thumb {
   height: 60px;
   width: auto;
   border-radius: 4px;
-  margin-right: 3px;
   cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
+  transition: transform 0.15s, box-shadow 0.15s, filter 0.2s;
   vertical-align: middle;
 }
 
 .card-thumb-selected {
   transform: translateY(-10px);
   box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+}
+
+@keyframes discardCard {
+  0%   { opacity: 1; transform: translateY(0) scale(1); }
+  100% { opacity: 0; transform: translateY(24px) scale(0.85); }
+}
+
+.card-discarding {
+  animation: discardCard 320ms ease-in forwards;
+  pointer-events: none;
 }
 
 /* Face-down card that only you can see — warm dim tint */
@@ -144,6 +166,42 @@
 .card-thumb-public {
 }
 
+/* Per-row deal buttons (dealer only) */
+.deal-btns {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-right: 8px;
+  flex-shrink: 0;
+  width: fit-content;
+}
+
+.deal-btn {
+  background: rgba(0,0,0,0.12);
+  border: 1px solid rgba(0,0,0,0.2);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+  line-height: 1;
+  padding: 2px 5px;
+  color: #333;
+}
+
+.deal-btn:hover {
+  background: rgba(0,0,0,0.22);
+}
+
+/* On the dark table-info-card the buttons need light treatment */
+.table-info-card .deal-btn {
+  background: rgba(255,255,255,0.15);
+  border-color: rgba(255,255,255,0.3);
+  color: #fff;
+}
+
+.table-info-card .deal-btn:hover {
+  background: rgba(255,255,255,0.28);
+}
+
 /* Dealer panel */
 .dealer-panel {
   background: rgba(0,0,0,0.3) !important;
@@ -151,3 +209,4 @@
 }
 
 .dealer-panel .uk-text-muted { color: #aaa !important; }
+

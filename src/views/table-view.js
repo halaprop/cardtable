@@ -26,6 +26,8 @@ export class TableView {
     this.tableId = tableId
     this.user    = user
 
+    this._preloadCards()
+
     const onState = state => {
       this.state     = state
       this.app.state = state
@@ -49,6 +51,13 @@ export class TableView {
     this.state = null
   }
 
+  _preloadCards() {
+    const suits = ['S','H','D','C']
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
+    suits.forEach(s => ranks.forEach(r => { new Image().src = `cards/${r}${s}.svg` }))
+    new Image().src = 'cards/2B.svg'
+  }
+
   async _refreshUsers() {
     if (!this.state?.players?.length) return
     const uids = this.state.players.map(p => p.uid)
@@ -62,13 +71,102 @@ export class TableView {
     const s = this.state
     if (!s) return
 
-    this.root.innerHTML = `
-      ${this._tableInfoHTML(s)}
-      <div id="player-list" class="uk-margin-small-top">
-        ${s.players.map(p => this._playerHTML(p, s)).join('')}
-      </div>
-      ${this._isDealer() ? this._dealerControlsHTML(s) : this._playerControlsHTML()}
-    `
+    // Full render on first load or player list change
+    const playerList = this.root.querySelector('#player-list')
+    const renderedUids = playerList
+      ? [...playerList.querySelectorAll('.player-row')].map(el => el.dataset.uid)
+      : []
+    const currentUids = s.players.map(p => p.uid)
+    const samePlayerSet = renderedUids.length === currentUids.length
+      && currentUids.every((uid, i) => uid === renderedUids[i])
+
+    if (!samePlayerSet) {
+      // Full rebuild — player list changed
+      this.root.innerHTML = `
+        ${this._tableInfoHTML(s)}
+        <div id="player-list" class="uk-margin-small-top">
+          ${s.players.map(p => this._playerHTML(p, s)).join('')}
+        </div>
+        ${this._isDealer() ? this._dealerControlsHTML(s) : this._playerControlsHTML()}
+      `
+      return
+    }
+
+    // Patch — update only what changed without rebuilding cards
+    this.root.querySelector('.table-info-card').outerHTML = this._tableInfoHTML(s)
+
+    s.players.forEach(player => {
+      this._patchPlayerRow(player, s)
+    })
+
+    const dealerPanel = this.root.querySelector('.dealer-panel')
+    if (dealerPanel) dealerPanel.outerHTML = this._dealerControlsHTML(s)
+  }
+
+  _patchPlayerRow(player, s) {
+    const row = this.root.querySelector(`.player-row[data-uid="${player.uid}"]`)
+    if (!row) return
+
+    const isMe      = player.uid === this.user.$id
+    const isMyTurn  = this._isPlayersTurn(player, s)
+
+    // Update row classes
+    row.className = [
+      'uk-card uk-card-body uk-padding-small uk-margin-small-bottom player-row',
+      isMe      ? 'player-row-me'   : 'player-row-other',
+      isMyTurn  ? 'player-row-turn' : '',
+      player.folded ? 'player-row-folded' : '',
+    ].filter(Boolean).join(' ')
+
+    // Patch individual cards — only update changed ones
+    const cardContainer = row.querySelector('.player-cards')
+    if (cardContainer) {
+      // Remove ghost slots left over from discard animations
+      cardContainer.querySelectorAll('.card-slot').forEach(slot => {
+        if (slot.style.width === '0px') slot.remove()
+      })
+      const imgs = [...cardContainer.querySelectorAll('.card-slot .card-thumb')]
+      player.cards.forEach((card, i) => {
+        const img = imgs[i]
+        if (!img) return
+        const showFace = card.faceUp || isMe
+        const newSrc   = showFace ? this._cardFileName(card) : 'cards/2B.svg'
+        if (img.src !== newSrc && !img.src.endsWith(newSrc)) img.src = newSrc
+
+        const selected = this._selectedCards[player.uid]?.has(i)
+        img.classList.toggle('card-thumb-selected', !!selected)
+        img.classList.toggle('card-thumb-private', isMe && !card.faceUp)
+        img.classList.toggle('card-thumb-public',  card.faceUp)
+      })
+      // Remove extra cards, add new ones
+      imgs.slice(player.cards.length).forEach(el => el.remove())
+      if (player.cards.length > imgs.length) {
+        player.cards.slice(imgs.length).forEach((card, i) => {
+          cardContainer.insertAdjacentHTML('beforeend',
+            this._cardHTML(player.uid, card, imgs.length + i, isMe))
+        })
+      }
+    }
+
+    // Update round drawer if it's open and it's a system round
+    if (isMyTurn && s.round) {
+      const inner = row.querySelector('.player-drawer-inner')
+      const wrapper = row.querySelector('.player-drawer-wrapper')
+      if (inner && wrapper) {
+        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        wrapper.classList.add('open')
+        this._expandedUids.add(player.uid)
+      }
+    }
+  }
+
+  _dealBtns(uid) {
+    if (!this._isDealer()) return ''
+    return `
+      <div class="deal-btns">
+        <button class="deal-btn" data-action="deal-down" data-deal-uid="${uid}" title="Deal face down">↓</button>
+        <button class="deal-btn" data-action="deal-up"   data-deal-uid="${uid}" title="Deal face up">↑</button>
+      </div>`
   }
 
   _tableInfoHTML(s) {
@@ -85,7 +183,13 @@ export class TableView {
           </div>
         </div>
         <div class="uk-text-small uk-text-muted uk-margin-small-top last-action">${s.lastAction || ''}</div>
-        ${s.cards?.length ? `<div class="uk-margin-small-top">${this._cardsHTML('table', s.cards, false)}</div>` : ''}
+        <div class="uk-flex uk-flex-middle player-row-main uk-margin-small-top">
+          <div class="player-row-left">${this._dealBtns('table')}</div>
+          <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
+            ${s.cards?.length ? this._cardsHTML('table', s.cards, false) : ''}
+          </div>
+          <div class="player-row-right"></div>
+        </div>
       </div>
     `
   }
@@ -111,17 +215,20 @@ export class TableView {
 
     return `
       <div class="${rowClass}" data-uid="${player.uid}">
-        <div class="uk-flex uk-flex-between uk-flex-middle player-row-main"
+        <div class="uk-flex uk-flex-middle player-row-main"
              data-toggle-uid="${isMe ? player.uid : ''}">
-          <div class="uk-flex uk-flex-middle">
+          <div class="uk-flex uk-flex-middle player-row-left">
+          ${this._dealBtns(player.uid)}
             ${isMyTurn  ? '<span class="turn-pip uk-margin-small-right" title="Your turn">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
             ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" title="Dealer button">D</span>' : ''}
             ${isDealer  ? '<span class="uk-text-muted uk-margin-small-right uk-text-small" title="Dealer">(deal)</span>' : ''}
             <span class="uk-text-bold player-name">${player.name}</span>
           </div>
-          <div class="uk-flex uk-flex-middle">
+          <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
             ${this._cardsHTML(player.uid, player.cards, isMe)}
-            <span class="uk-badge chip-badge uk-margin-small-left">${chips}</span>
+          </div>
+          <div class="uk-flex uk-flex-middle uk-flex-right player-row-right">
+            <span class="uk-badge chip-badge">${chips}</span>
           </div>
         </div>
         <div class="player-drawer-wrapper ${isExpanded ? 'open' : ''}">
@@ -133,19 +240,18 @@ export class TableView {
 
   _cardsHTML(uid, cards, isMe) {
     if (!cards?.length) return '<span class="uk-text-muted uk-text-small">no cards</span>'
-    const selected = this._selectedCards[uid] ?? new Set()
-    return cards.map((card, i) => {
-      // Visibility: face-up cards show to everyone; face-down cards show to owner only
-      const showFace  = card.faceUp || isMe
-      const src       = showFace ? this._cardFileName(card) : 'cards/2B.svg'
-      const selClass  = isMe && selected.has(i) ? 'card-thumb-selected' : ''
-      const visClass  = isMe && !card.faceUp ? 'card-thumb-private'
-                      : card.faceUp          ? 'card-thumb-public'
-                      : ''
-      const dataAttr  = isMe ? `data-card-uid="${uid}" data-card-index="${i}"` : ''
-      const title     = card.faceUp ? this._friendlyName(card) : isMe ? 'private (only you can see this)' : 'face down'
-      return `<img class="card-thumb ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}">`
-    }).join('')
+    return `<span class="player-cards">${cards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')}</span>`
+  }
+
+  _cardHTML(uid, card, i, isMe) {
+    const selected  = this._selectedCards[uid] ?? new Set()
+    const showFace  = card.faceUp || isMe
+    const src       = showFace ? this._cardFileName(card) : 'cards/2B.svg'
+    const selClass  = isMe && selected.has(i) ? 'card-thumb-selected' : ''
+    const visClass  = isMe && !card.faceUp ? 'card-thumb-private' : card.faceUp ? 'card-thumb-public' : ''
+    const dataAttr  = isMe ? `data-card-uid="${uid}" data-card-index="${i}"` : ''
+    const title     = card.faceUp ? this._friendlyName(card) : isMe ? 'private (only you can see this)' : 'face down'
+    return `<span class="card-slot"><img class="card-thumb ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}"></span>`
   }
 
   _roundActionsHTML(player, round) {
@@ -206,46 +312,48 @@ export class TableView {
   _userActionsHTML(player) {
     const selected = this._selectedCards[player.uid]?.size ?? 0
     return `
-      <div class="uk-flex uk-flex-wrap" style="gap:6px">
-        <button class="uk-button uk-button-default uk-button-small" data-action="reveal-all" data-uid="${player.uid}">Reveal All</button>
-        <button class="uk-button uk-button-default uk-button-small" data-action="reveal" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Reveal Selected</button>
-        <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
-        <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}">Stand Up</button>
-      </div>
-      <div class="uk-flex uk-flex-middle uk-margin-small-top" style="gap:8px">
-        <input id="buy-input" class="uk-input uk-form-small" style="width:80px" type="number" min="1" placeholder="chips">
-        <button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>
+      <div class="uk-flex uk-flex-between uk-flex-middle" style="gap:6px">
+        <div class="uk-flex" style="gap:6px">
+          <button class="uk-button uk-button-default uk-button-small" data-action="reveal-all" data-uid="${player.uid}">Reveal All</button>
+          <button class="uk-button uk-button-default uk-button-small" data-action="reveal" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Reveal Selected</button>
+          <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
+        </div>
+        <div class="uk-flex uk-flex-middle" style="gap:6px">
+          <button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>
+          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}">Stand Up</button>
+        </div>
       </div>
     `
   }
 
+  _dealerBtn(label, action, variant, disabled) {
+    if (disabled) {
+      return `<button class="uk-button uk-button-small" data-action="${action}" data-disabled="1"
+        style="color:rgba(255,255,255,0.38);background:transparent;border:1px solid rgba(255,255,255,0.15);cursor:default">${label}</button>`
+    }
+    if (variant === 'uk-button-default') {
+      return `<button class="uk-button ${variant} uk-button-small" data-action="${action}"
+        style="color:#fff;background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.35)">${label}</button>`
+    }
+    return `<button class="uk-button ${variant} uk-button-small" data-action="${action}">${label}</button>`
+  }
+
   _dealerControlsHTML(s) {
-    const hasPlayers   = s.players.length >= 2
-    const unfoldedPids = s.players.filter(p => !p.folded).map(p => p.uid)
+    const hasPlayers = s.players.length >= 2
+    const noGame     = !s.gameOn
+    const b          = this._dealerBtn.bind(this)
+
     return `
       <div class="uk-card uk-card-body uk-padding-small uk-margin-top dealer-panel">
         <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Dealer Controls</div>
         <div class="uk-flex uk-flex-wrap" style="gap:6px">
-          <button class="uk-button uk-button-primary uk-button-small" data-action="new-game">New Game</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="deal-down" ${!s.gameOn ? 'disabled' : ''}>Deal ↓</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="deal-up" ${!s.gameOn ? 'disabled' : ''}>Deal ↑</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="bet-round" ${!hasPlayers || !s.gameOn ? 'disabled' : ''}>Bet</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="pass-round" ${!hasPlayers || !s.gameOn ? 'disabled' : ''}>Pass</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="declare-hl" ${!hasPlayers || !s.gameOn ? 'disabled' : ''}>Hi/Lo</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="declare-hlb" ${!hasPlayers || !s.gameOn ? 'disabled' : ''}>Hi/Lo/Both</button>
-          <button class="uk-button uk-button-secondary uk-button-small" data-action="end-game" ${!s.gameOn ? 'disabled' : ''}>End Game</button>
-          <button class="uk-button uk-button-danger uk-button-small" data-action="johnny-drama">Johnny Drama</button>
-        </div>
-
-        <!-- Deal target selector -->
-        <div class="uk-margin-small-top uk-flex uk-flex-middle" style="gap:6px">
-          <span class="uk-text-small uk-text-muted">Deal to:</span>
-          <select id="deal-target" class="uk-select uk-form-small" style="width:160px">
-            <option value="table">Table</option>
-            ${s.players.filter(p => !p.folded).map(p =>
-              `<option value="${p.uid}">${p.name}</option>`
-            ).join('')}
-          </select>
+          ${b('New Game',    'new-game',    'uk-button-primary',   false)}
+          ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
+          ${b('Pass',        'pass-round',  'uk-button-default',   !hasPlayers || noGame)}
+          ${b('Hi/Lo',       'declare-hl',  'uk-button-default',   !hasPlayers || noGame)}
+          ${b('Hi/Lo/Both',  'declare-hlb', 'uk-button-default',   !hasPlayers || noGame)}
+          ${b('End Game',    'end-game',    'uk-button-secondary', noGame)}
+          ${b('Johnny Drama','johnny-drama','uk-button-danger',    false)}
         </div>
 
         <!-- Bet round: start-with selector -->
@@ -309,7 +417,7 @@ export class TableView {
 
       // Action buttons
       const btn = e.target.closest('[data-action]')
-      if (btn) this._handleAction(btn)
+      if (btn && !btn.dataset.disabled) this._handleAction(btn)
     })
   }
 
@@ -339,22 +447,33 @@ export class TableView {
       case 'reveal': {
         const selected = [...(this._selectedCards[uid] ?? [])]
         const cards    = selected.map(i => this.state.players.find(p => p.uid === uid).cards[i])
-        this._selectedCards[uid] = new Set()
+        this._clearSelection(uid)
         return this._mutate(() => TableMutations.reveal(this.tableId, { uid, cards }))
       }
       case 'discard': {
         const selected = [...(this._selectedCards[uid] ?? [])]
         const cards    = selected.map(i => this.state.players.find(p => p.uid === uid).cards[i])
-        this._selectedCards[uid] = new Set()
+        const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
+        selected.forEach(i => {
+          const cardEl = row?.querySelector(`[data-card-index="${i}"]`)
+          if (!cardEl) return
+          const slot = cardEl.parentElement
+          slot.style.width    = slot.offsetWidth + 'px'
+          slot.style.overflow = 'hidden'
+          cardEl.classList.add('card-discarding')
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            slot.style.transition = 'width 200ms ease-out, margin-right 200ms ease-out'
+            slot.style.width       = '0'
+            slot.style.marginRight = '0'
+          }))
+        })
+        this._clearSelection(uid)
         return this._mutate(() => TableMutations.discard(this.tableId, { uid, cards }))
       }
       case 'stand-up':    return this._mutate(() => TableMutations.playerLeave(this.tableId, { uid }))
 
-      case 'buy-chips': {
-        const amount = +this.root.querySelector('#buy-input')?.value ?? 0
-        if (amount > 0) return this._mutate(() => buyChips(uid, amount))
-        break
-      }
+      case 'buy-chips':
+        return this._showBuyChipsDialog(uid)
 
       case 'usurp':
         if (confirm('You will become the dealer. Confirm?'))
@@ -365,10 +484,8 @@ export class TableView {
       case 'new-game':    return this._showNewGameDialog()
       case 'end-game':    return this._showEndGameDialog()
       case 'deal-down':
-      case 'deal-up': {
-        const targetUid = this.root.querySelector('#deal-target')?.value ?? 'table'
-        return this._mutate(() => TableMutations.dealOne(this.tableId, { uid: targetUid, faceUp: action === 'deal-up' }))
-      }
+      case 'deal-up':
+        return this._mutate(() => TableMutations.dealOne(this.tableId, { uid: btn.dataset.dealUid, faceUp: action === 'deal-up' }))
       case 'bet-round':
         this.root.querySelector('#bet-round-options').hidden = false
         break
@@ -419,6 +536,23 @@ export class TableView {
         gameName: name, pattern, diceGame,
         button: this.state.button, requests: [],
       }))
+    }
+    submit.addEventListener('click', handler)
+    modal.show()
+  }
+
+  _showBuyChipsDialog(uid) {
+    const modal  = UIkit.modal('#modal-buy-chips')
+    const submit = document.getElementById('bc-submit')
+    const input  = document.getElementById('bc-amount')
+    input.value  = ''
+    const handler = () => {
+      const amount = +input.value
+      if (amount > 0) {
+        modal.hide()
+        submit.removeEventListener('click', handler)
+        this._mutate(() => buyChips(uid, amount))
+      }
     }
     submit.addEventListener('click', handler)
     modal.show()
@@ -485,9 +619,16 @@ export class TableView {
     }
   }
 
+  _clearSelection(uid) {
+    this._selectedCards[uid] = new Set()
+    const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
+    row?.querySelectorAll('.card-thumb-selected').forEach(el => el.classList.remove('card-thumb-selected'))
+    this._refreshDrawerButtons(uid)
+  }
+
   _refreshDrawerButtons(uid) {
     const count = this._selectedCards[uid]?.size ?? 0
-    const drawer = this.root.querySelector(`.player-row[data-uid="${uid}"] .player-drawer`)
+    const drawer = this.root.querySelector(`.player-row[data-uid="${uid}"] .player-drawer-inner`)
     if (!drawer) return
     drawer.querySelectorAll('[data-action="reveal"]').forEach(b => b.disabled = count === 0)
     drawer.querySelectorAll('[data-action="discard"]').forEach(b => b.disabled = count === 0)
