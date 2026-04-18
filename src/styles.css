@@ -56,7 +56,98 @@
 
 /* Table felt */
 #table-root {
-  background: #2d6a4f;
+  background: #1b4332;
   min-height: 100vh;
   padding: 16px;
 }
+
+.table-info-card {
+  background: #2d6a4f !important;
+  border: none;
+}
+
+.last-action {
+  min-height: 1.2em;
+  font-style: italic;
+}
+
+/* Player rows */
+.player-row {
+  border-left: 4px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.player-row-me    { background: #f0f4f0 !important; }
+.player-row-other { background: #e8e8e8 !important; }
+.player-row-turn  { border-left-color: #f0a500 !important; }
+.player-row-folded { opacity: 0.45; }
+
+.player-name { font-size: 1.1em; }
+
+.turn-pip       { color: #f0a500; font-size: 1.2em; line-height: 1; }
+.turn-pip-empty { display: inline-block; width: 1em; }
+
+.dealer-btn {
+  background: #1e87f0 !important;
+  font-size: 0.75em;
+}
+
+.chip-badge {
+  background: #222 !important;
+  font-size: 1em;
+  min-width: 2.5em;
+}
+
+/* Drawer animation — grid trick gives true height reveal */
+.player-drawer-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms ease-out;
+}
+
+.player-drawer-wrapper.open {
+  grid-template-rows: 1fr;
+}
+
+.player-drawer-inner {
+  overflow: hidden;
+  padding-top: 0;
+  transition: padding-top 250ms ease-out;
+}
+
+.player-drawer-wrapper.open .player-drawer-inner {
+  padding-top: 8px;
+}
+
+/* Cards in hand */
+.card-thumb {
+  height: 60px;
+  width: auto;
+  border-radius: 4px;
+  margin-right: 3px;
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+  vertical-align: middle;
+}
+
+.card-thumb-selected {
+  transform: translateY(-10px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.4);
+}
+
+/* Face-down card that only you can see — warm dim tint */
+.card-thumb-private {
+  filter: brightness(0.70) sepia(0.25);
+}
+
+/* Face-up card visible to everyone — no special treatment needed */
+.card-thumb-public {
+}
+
+/* Dealer panel */
+.dealer-panel {
+  background: rgba(0,0,0,0.3) !important;
+  border: none;
+}
+
+.dealer-panel .uk-text-muted { color: #aaa !important; }

@@ -55,6 +55,44 @@
     <div id="table-root"></div>
   </div>
 
+  <!-- New Game Modal -->
+  <div id="modal-new-game" uk-modal>
+    <div class="uk-modal-dialog uk-modal-body">
+      <h3 class="uk-modal-title">New Game</h3>
+      <div class="uk-margin">
+        <label class="uk-form-label">Game name</label>
+        <input id="ng-name" class="uk-input" type="text" placeholder="Five Card Draw" value="Five Card Draw">
+      </div>
+      <div class="uk-margin">
+        <label class="uk-form-label">Deal pattern (u=face up, d=face down)</label>
+        <input id="ng-pattern" class="uk-input" type="text" placeholder="ddddd" value="ddddd">
+      </div>
+      <div class="uk-margin">
+        <label><input id="ng-dice" class="uk-checkbox" type="checkbox"> Dice game</label>
+      </div>
+      <div class="uk-modal-footer uk-text-right">
+        <button class="uk-button uk-button-default uk-modal-close">Cancel</button>
+        <button id="ng-submit" class="uk-button uk-button-primary uk-margin-small-left">Start Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Game Modal -->
+  <div id="modal-end-game" uk-modal>
+    <div class="uk-modal-dialog uk-modal-body">
+      <h3 class="uk-modal-title">End Game</h3>
+      <p id="eg-pot-label"></p>
+      <div class="uk-margin">
+        <label class="uk-form-label">Winner</label>
+        <select id="eg-winner" class="uk-select"></select>
+      </div>
+      <div class="uk-modal-footer uk-text-right">
+        <button class="uk-button uk-button-default uk-modal-close">Cancel</button>
+        <button id="eg-submit" class="uk-button uk-button-primary uk-margin-small-left">Pay Out</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Debug overlay -->
   <div id="debug-overlay" hidden>
     <div id="debug-content"></div>
