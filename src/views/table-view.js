@@ -539,33 +539,69 @@ export class TableView {
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
   _showNewGameDialog() {
-    const modal    = UIkit.modal('#modal-new-game')
-    const diceEl   = document.getElementById('ng-dice')
+    const modal     = UIkit.modal('#modal-new-game')
+    const diceEl    = document.getElementById('ng-dice')
     const rtSection = document.getElementById('ng-round-types')
 
     const syncDice = () => { rtSection.hidden = diceEl.checked }
     diceEl.addEventListener('change', syncDice)
     syncDice()
 
+    const anteSection  = document.getElementById('ng-ante-section')
+    const blindSection = document.getElementById('ng-blind-section')
+    const syncMode = () => {
+      const mode = document.querySelector('input[name="ng-ante-mode"]:checked')?.value ?? 'none'
+      anteSection.hidden  = mode !== 'ante'
+      blindSection.hidden = mode !== 'blind'
+    }
+    document.querySelectorAll('input[name="ng-ante-mode"]').forEach(r => r.addEventListener('change', syncMode))
+    syncMode()
+
     const submit = document.getElementById('ng-submit')
     const handler = () => {
       const name     = document.getElementById('ng-name').value.trim() || 'Five Card Draw'
       const pattern  = document.getElementById('ng-pattern').value.trim()
-      const diceGame   = diceEl.checked
+      const diceGame    = diceEl.checked
       const hasPassing  = !diceGame && document.getElementById('ng-pass').checked
       const hasHiLo     = !diceGame && document.getElementById('ng-hilo').checked
       const hasHiLoBoth = !diceGame && document.getElementById('ng-hilob').checked
       const allowBuyIn  = document.getElementById('ng-buyin').checked
+      const anteMode    = document.querySelector('input[name="ng-ante-mode"]:checked')?.value ?? 'none'
+      const players     = this.state.players.filter(p => !p.folded)
+      const requests    = this._buildAnteRequests(anteMode, players)
       modal.hide()
       submit.removeEventListener('click', handler)
       diceEl.removeEventListener('change', syncDice)
+      document.querySelectorAll('input[name="ng-ante-mode"]').forEach(r => r.removeEventListener('change', syncMode))
       this._mutate(() => TableMutations.startGame(this.tableId, {
         gameName: name, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth, allowBuyIn,
-        button: this.state.button, requests: [],
+        button: this.state.button, requests,
       }))
     }
     submit.addEventListener('click', handler)
     modal.show()
+  }
+
+  _buildAnteRequests(mode, players) {
+    if (mode === 'ante') {
+      const chips = +document.getElementById('ng-ante-amount').value
+      if (!chips) return []
+      return players.map(p => ({ uid: p.uid, chips, message: `Ante: ${chips} chips` }))
+    }
+    if (mode === 'blind') {
+      const small = +document.getElementById('ng-small-blind').value
+      const big   = +document.getElementById('ng-big-blind').value
+      if (!small || !big) return []
+      const buttonIdx  = players.findIndex(p => p.uid === this.state.button)
+      const nextIdx    = i => (i + 1) % players.length
+      const smallPlayer = players[nextIdx(buttonIdx)]
+      const bigPlayer   = players[nextIdx(nextIdx(buttonIdx))]
+      return [
+        { uid: smallPlayer.uid, chips: small, message: `Small blind: ${small} chips` },
+        { uid: bigPlayer.uid,   chips: big,   message: `Big blind: ${big} chips`, bigBlind: true },
+      ]
+    }
+    return []
   }
 
   _showBuyChipsDialog(uid) {
