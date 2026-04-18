@@ -341,19 +341,23 @@ export class TableView {
   _dealerControlsHTML(s) {
     const hasPlayers = s.players.length >= 2
     const noGame     = !s.gameOn
-    const b          = this._dealerBtn.bind(this)
+    const b = this._dealerBtn.bind(this)
 
     return `
       <div class="uk-card uk-card-body uk-padding-small uk-margin-top dealer-panel">
         <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Dealer Controls</div>
-        <div class="uk-flex uk-flex-wrap" style="gap:6px">
-          ${b('New Game',    'new-game',    'uk-button-primary',   false)}
-          ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
-          ${b('Pass',        'pass-round',  'uk-button-default',   !hasPlayers || noGame)}
-          ${b('Hi/Lo',       'declare-hl',  'uk-button-default',   !hasPlayers || noGame)}
-          ${b('Hi/Lo/Both',  'declare-hlb', 'uk-button-default',   !hasPlayers || noGame)}
-          ${b('End Game',    'end-game',    'uk-button-secondary', noGame)}
-          ${b('Johnny Drama','johnny-drama','uk-button-danger',    false)}
+        <div class="uk-flex uk-flex-between" style="gap:6px">
+          <div class="uk-flex uk-flex-wrap" style="gap:6px">
+            ${b('New Game',    'new-game',    'uk-button-primary',   false)}
+            ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
+            ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame) : ''}
+            ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame) : ''}
+            ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame) : ''}
+          </div>
+          <div class="uk-flex" style="gap:6px">
+            ${b('End Game',    'end-game',    'uk-button-secondary', noGame)}
+            ${b('Johnny Drama','johnny-drama','uk-button-danger',    false)}
+          </div>
         </div>
 
         <!-- Bet round: start-with selector -->
@@ -523,17 +527,27 @@ export class TableView {
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
   _showNewGameDialog() {
-    const modal = UIkit.modal('#modal-new-game')
+    const modal    = UIkit.modal('#modal-new-game')
+    const diceEl   = document.getElementById('ng-dice')
+    const rtSection = document.getElementById('ng-round-types')
+
+    const syncDice = () => { rtSection.hidden = diceEl.checked }
+    diceEl.addEventListener('change', syncDice)
+    syncDice()
 
     const submit = document.getElementById('ng-submit')
     const handler = () => {
-      const name    = document.getElementById('ng-name').value.trim() || 'Five Card Draw'
-      const pattern = document.getElementById('ng-pattern').value.trim()
-      const diceGame = document.getElementById('ng-dice').checked
+      const name     = document.getElementById('ng-name').value.trim() || 'Five Card Draw'
+      const pattern  = document.getElementById('ng-pattern').value.trim()
+      const diceGame   = diceEl.checked
+      const hasPassing  = !diceGame && document.getElementById('ng-pass').checked
+      const hasHiLo     = !diceGame && document.getElementById('ng-hilo').checked
+      const hasHiLoBoth = !diceGame && document.getElementById('ng-hilob').checked
       modal.hide()
       submit.removeEventListener('click', handler)
+      diceEl.removeEventListener('change', syncDice)
       this._mutate(() => TableMutations.startGame(this.tableId, {
-        gameName: name, pattern, diceGame,
+        gameName: name, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth,
         button: this.state.button, requests: [],
       }))
     }

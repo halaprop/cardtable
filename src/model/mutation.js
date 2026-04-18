@@ -37,7 +37,7 @@ export function moveDealerButton(state, { uid }) {
   return { button: uid }
 }
 
-export function startGame(state, { gameName, pattern, diceGame, button, requests, lastAction: customAction }) {
+export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth, button, requests, lastAction: customAction }) {
   const deck    = new Deck().shuffle()
   const players = state.players.map(p => ({ ...p, folded: false, betCredit: 0, cards: [] }))
 
@@ -60,6 +60,7 @@ export function startGame(state, { gameName, pattern, diceGame, button, requests
 
   return {
     gameOn: true, gameName, diceGame: diceGame === true,
+    hasPassing: !!hasPassing, hasHiLo: !!hasHiLo, hasHiLoBoth: !!hasHiLoBoth,
     button: button ?? state.button,
     cards: [], deck: deck.toJSON(),
     players, pot: state.pot ?? 0,
