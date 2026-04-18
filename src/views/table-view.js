@@ -479,7 +479,14 @@ export class TableView {
         this._clearSelection(uid)
         return this._mutate(() => TableMutations.discard(this.tableId, { uid, cards }))
       }
-      case 'stand-up':    return this._mutate(() => TableMutations.playerLeave(this.tableId, { uid }))
+      case 'stand-up':
+        this._mutate(() => TableMutations.playerLeave(this.tableId, { uid })).then(() => {
+          this._unsubscribe?.()
+          this._unsubscribe = null
+          this.tableId = null
+          window.location.hash = '#lobby'
+        })
+        return
 
       case 'buy-chips':
         return this._showBuyChipsDialog(uid)
