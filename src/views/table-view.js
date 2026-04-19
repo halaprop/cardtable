@@ -669,71 +669,123 @@ export class TableView {
   }
 
   _showEndGameDialog() {
-    const s       = this.state
-    const pot     = s.pot
-    const players = s.players.filter(p => !p.folded)
+    const gs      = this.state
+    const pot     = gs.pot
+    const players = gs.players
+
     document.getElementById('eg-pot-label').textContent = `Pot: ${pot} chips`
 
-    const opts = players.map(p => `<option value="${p.uid}">${p.name}</option>`).join('')
-    const form = document.getElementById('eg-form')
+    const form    = document.getElementById('eg-form')
+    const preview = document.getElementById('eg-preview')
+    const modal   = UIkit.modal('#modal-end-game')
+    const submit  = document.getElementById('eg-submit')
+    const sel     = {}
 
-    if (s.hasHiLo || s.hasHiLoBoth) {
-      form.innerHTML = `
-        <div class="uk-margin">
-          <label class="uk-form-label">High winner</label>
-          <select id="eg-high" class="uk-select">${opts}</select>
-        </div>
-        <div class="uk-margin">
-          <label class="uk-form-label">Low winner</label>
-          <select id="eg-low" class="uk-select">${opts}</select>
-        </div>
-      `
-    } else {
-      form.innerHTML = `
-        <div class="uk-margin">
-          <label class="uk-form-label">Winner</label>
-          <select id="eg-winner" class="uk-select">${opts}</select>
-        </div>
-      `
+    const places = Math.min(3, players.length)
+    const sp = gs.diceGame ? (() => {
+      if (places === 1) return { '1st': pot }
+      if (places === 2) { const a = Math.ceil(pot * 0.6); return { '1st': a, '2nd': pot - a } }
+      const a = Math.ceil(pot * 0.6), b = Math.ceil(pot * 0.25)
+      return { '1st': a, '2nd': b, '3rd': pot - a - b }
+    })() : (() => {
+      const h = Math.ceil(pot / 2), l = Math.floor(pot / 2)
+      return { w: pot, h, l, hh: Math.ceil(h/2), hl: Math.floor(h/2), lh: Math.ceil(l/2), ll: Math.floor(l/2) }
+    })()
+
+    const takenUids = (exceptKey) => Object.entries(sel)
+      .filter(([k, v]) => k !== exceptKey && v && v !== 'split')
+      .map(([, v]) => v)
+
+    const mkOpts = (key, includeSplit = false) => {
+      const taken = takenUids(key)
+      const available = players.filter(p => !taken.includes(p.uid))
+      const splitOpt  = includeSplit ? `<option value="split"${sel[key]==='split'?' selected':''}>— Split —</option>` : ''
+      return `<option value="">— select —</option>${splitOpt}` +
+        available.map(p => `<option value="${p.uid}"${sel[key]===p.uid?' selected':''}>${p.name}</option>`).join('')
     }
 
-    const modal  = UIkit.modal('#modal-end-game')
-    const submit = document.getElementById('eg-submit')
+    const mkSelect = (key, includeSplit = false) =>
+      `<select class="uk-select" data-key="${key}">${mkOpts(key, includeSplit)}</select>`
+
+    const mkPreview = () => {
+      const name = uid => players.find(p => p.uid === uid)?.name ?? ''
+      if (gs.diceGame) {
+        return ['1st','2nd','3rd'].slice(0, places).filter(k => sel[k]).map(k => `${name(sel[k])} wins ${sp[k]}`).join('; ')
+      }
+      if (sel.w && sel.w !== 'split') return `${name(sel.w)} wins ${sp.w} chips`
+      if (sel.w === 'split') {
+        const parts = []
+        if (sel.h && sel.h !== 'split' && sel.l && sel.l !== 'split')
+          parts.push(`${name(sel.h)} wins high (${sp.h}), ${name(sel.l)} wins low (${sp.l})`)
+        else if (sel.h && sel.h !== 'split') parts.push(`${name(sel.h)} wins high (${sp.h})`)
+        else if (sel.l && sel.l !== 'split') parts.push(`${name(sel.l)} wins low (${sp.l})`)
+        if (sel.h === 'split' && sel.hh && sel.hl) parts.push(`${name(sel.hh)} + ${name(sel.hl)} split high (${sp.hh}/${sp.hl})`)
+        if (sel.l === 'split' && sel.lh && sel.ll) parts.push(`${name(sel.lh)} + ${name(sel.ll)} split low (${sp.lh}/${sp.ll})`)
+        return parts.join('; ')
+      }
+      return ''
+    }
+
+    const render = () => {
+      let html = ''
+      if (gs.diceGame) {
+        html = ['1st','2nd','3rd'].slice(0, places).map(k =>
+          `<div class="uk-margin"><label class="uk-form-label">${k.charAt(0).toUpperCase()+k.slice(1)} Place — ${sp[k]} chips</label>${mkSelect(k)}</div>`
+        ).join('')
+      } else {
+        html += `<div class="uk-margin"><label class="uk-form-label">Winner</label>${mkSelect('w', true)}</div>`
+        if (sel.w === 'split') {
+          html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
+            <div class="uk-width-1-2"><label class="uk-form-label">High winner</label>${mkSelect('h', true)}</div>
+            <div class="uk-width-1-2"><label class="uk-form-label">Low winner</label>${mkSelect('l', true)}</div>
+          </div>`
+          if (sel.h === 'split') html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
+            <div class="uk-width-1-2"><label class="uk-form-label">Split high — ${sp.hh}/${sp.hl} chips</label>${mkSelect('hh')}</div>
+            <div class="uk-width-1-2"><label class="uk-form-label">with</label>${mkSelect('hl')}</div>
+          </div>`
+          if (sel.l === 'split') html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
+            <div class="uk-width-1-2"><label class="uk-form-label">Split low — ${sp.lh}/${sp.ll} chips</label>${mkSelect('lh')}</div>
+            <div class="uk-width-1-2"><label class="uk-form-label">with</label>${mkSelect('ll')}</div>
+          </div>`
+        }
+      }
+      form.innerHTML = html
+      if (preview) preview.textContent = mkPreview()
+
+      form.querySelectorAll('select[data-key]').forEach(el => {
+        el.addEventListener('change', () => {
+          const key = el.dataset.key
+          sel[key] = el.value
+          if (key === 'w') { delete sel.h; delete sel.l; delete sel.hh; delete sel.hl; delete sel.lh; delete sel.ll }
+          if (key === 'h') { delete sel.hh; delete sel.hl }
+          if (key === 'l') { delete sel.lh; delete sel.ll }
+          render()
+        })
+      })
+    }
+
+    render()
+
     const handler = () => {
+      const winnerChipMap = {}
+      const credit = (key) => {
+        const uid = sel[key]
+        if (!uid || uid === 'split') return
+        const name = players.find(p => p.uid === uid)?.name ?? ''
+        if (!winnerChipMap[uid]) winnerChipMap[uid] = { uid, name, winnings: 0 }
+        winnerChipMap[uid].winnings += sp[key]
+      }
+      if (gs.diceGame) {
+        ;['1st','2nd','3rd'].slice(0, places).forEach(credit)
+      } else if (sel.w && sel.w !== 'split') {
+        credit('w')
+      } else {
+        ;['h','l','hh','hl','lh','ll'].forEach(credit)
+      }
+      if (!Object.keys(winnerChipMap).length) return
       modal.hide()
       submit.removeEventListener('click', handler)
-
-      let winnerChipMap = {}
-      let lastAction    = ''
-
-      const credit = (uid, amount) => {
-        const name = players.find(p => p.uid === uid).name
-        if (winnerChipMap[uid]) winnerChipMap[uid].winnings += amount
-        else winnerChipMap[uid] = { uid, name, winnings: amount }
-      }
-
-      if (s.hasHiLo || s.hasHiLoBoth) {
-        const highUid = document.getElementById('eg-high').value
-        const lowUid  = document.getElementById('eg-low').value
-        if (highUid === lowUid) {
-          credit(highUid, pot)
-          lastAction = `${players.find(p => p.uid === highUid).name} wins high and low — takes ${pot} chips.`
-        } else {
-          const half = Math.floor(pot / 2)
-          credit(highUid, pot - half)  // high gets remainder on odd pot
-          credit(lowUid,  half)
-          const hn = players.find(p => p.uid === highUid).name
-          const ln = players.find(p => p.uid === lowUid).name
-          lastAction = `${hn} wins high (${pot - half}), ${ln} wins low (${half}).`
-        }
-      } else {
-        const uid    = document.getElementById('eg-winner').value
-        const winner = players.find(p => p.uid === uid)
-        credit(uid, pot)
-        lastAction = `${winner.name} wins ${pot} chips.`
-      }
-
-      this._mutate(() => TableMutations.endGame(this.tableId, { lastAction }, winnerChipMap))
+      this._mutate(() => TableMutations.endGame(this.tableId, { lastAction: mkPreview() }, winnerChipMap))
     }
     submit.addEventListener('click', handler)
     modal.show()
