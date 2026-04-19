@@ -195,6 +195,21 @@
   background: rgba(0,0,0,0.22);
 }
 
+.deal-btn-primary {
+  background: rgba(0,0,0,0.18);
+  border-color: rgba(0,0,0,0.35);
+  color: #222;
+  font-weight: 600;
+  font-size: 14px;
+  padding: 4px 10px;
+}
+
+.table-info-card .deal-btn-primary {
+  background: rgba(255,255,255,0.32);
+  border-color: rgba(255,255,255,0.65);
+  color: #fff;
+}
+
 /* On the dark table-info-card the buttons need light treatment */
 .table-info-card .deal-btn {
   background: rgba(255,255,255,0.15);

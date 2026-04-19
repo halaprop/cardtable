@@ -22,8 +22,9 @@ export class TableView {
 
   async activate(tableId, user) {
     this._unsubscribe?.()
-    this._expandedUids  = new Set()
-    this._selectedCards = {}
+    this._expandedUids    = new Set()
+    this._selectedCards   = {}
+    this._lastTableCardSig = null
     this.tableId = tableId
     this.user    = user
     this._unsubscribeUsers?.()
@@ -92,6 +93,7 @@ export class TableView {
 
     if (!samePlayerSet) {
       // Full rebuild — player list changed
+      this._lastTableCardSig = null
       this.root.innerHTML = `
         ${this._tableInfoHTML(s)}
         <div id="player-list" class="uk-margin-small-top">
@@ -103,7 +105,11 @@ export class TableView {
     }
 
     // Patch — update only what changed without rebuilding cards
-    this.root.querySelector('.table-info-card').outerHTML = this._tableInfoHTML(s)
+    const tableCardSig = JSON.stringify(s.cards) + s.lastAction + s.pot + s.round?.type
+    if (tableCardSig !== this._lastTableCardSig) {
+      this._lastTableCardSig = tableCardSig
+      this.root.querySelector('.table-info-card').outerHTML = this._tableInfoHTML(s)
+    }
 
     s.players.forEach(player => {
       this._patchPlayerRow(player, s)
@@ -146,6 +152,7 @@ export class TableView {
         if (img.src !== newSrc && !img.src.endsWith(newSrc)) img.src = newSrc
 
         const selected = this._selectedCards[player.uid]?.has(i)
+        img.classList.toggle('die-thumb',           card.suit === 'dice')
         img.classList.toggle('card-thumb-selected', !!selected)
         img.classList.toggle('card-thumb-private', isMe && !card.faceUp)
         img.classList.toggle('card-thumb-public',  card.faceUp)
@@ -192,10 +199,11 @@ export class TableView {
   _dealBtns(uid) {
     if (!this._isDealer()) return ''
     if (uid === 'table' && this.state?.diceGame) return ''
+    const isTable = uid === 'table'
     return `
       <div class="deal-btns">
-        <button class="deal-btn" data-action="deal-down" data-deal-uid="${uid}" title="Deal face down">↓</button>
-        <button class="deal-btn" data-action="deal-up"   data-deal-uid="${uid}" title="Deal face up">↑</button>
+        <button class="deal-btn ${isTable  ? 'deal-btn-primary' : ''}" data-action="deal-up"   data-deal-uid="${uid}" title="Deal face up">↑</button>
+        <button class="deal-btn ${!isTable ? 'deal-btn-primary' : ''}" data-action="deal-down" data-deal-uid="${uid}" title="Deal face down">↓</button>
       </div>`
   }
 
