@@ -82,6 +82,10 @@ export function subscribeTables(handler) {
   return subscribeCollection(DB_ID, TABLES_COLLECTION, doc => handler(deserialize(doc)))
 }
 
+export function subscribeUsers(handler) {
+  return subscribeCollection(DB_ID, USERS_COLLECTION, () => handler())
+}
+
 // --- Users ---
 
 export async function getUser(uid) {

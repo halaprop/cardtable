@@ -1,4 +1,4 @@
-import { TableMutations, subscribeTable, getUser, listUsers, buyChips } from '../store.js'
+import { TableMutations, subscribeTable, subscribeUsers, getUser, listUsers, buyChips } from '../store.js'
 import { Debug } from '../debug.js'
 
 export class TableView {
@@ -25,6 +25,10 @@ export class TableView {
     this._selectedCards = {}
     this.tableId = tableId
     this.user    = user
+    this._unsubscribeUsers?.()
+    this._unsubscribeUsers = subscribeUsers(() => {
+      this._refreshUsers().then(() => this._render())
+    })
 
     this._preloadCards()
 
@@ -32,6 +36,9 @@ export class TableView {
       this.state     = state
       this.app.state = state
       this._refreshUsers().then(() => this._render())
+      // Re-fetch chips after a short delay to catch concurrent chip-delta writes
+      // (ante/bet chip updates race with the table subscription firing)
+      setTimeout(() => this._refreshUsers().then(() => this._render()), 1500)
       Debug.refresh()
     }
 
@@ -47,7 +54,9 @@ export class TableView {
       TableMutations.playerLeave(this.tableId, { uid: this.user.$id })
     }
     this._unsubscribe?.()
+    this._unsubscribeUsers?.()
     this._unsubscribe = null
+    this._unsubscribeUsers = null
     this.state = null
   }
 
@@ -107,14 +116,15 @@ export class TableView {
     const row = this.root.querySelector(`.player-row[data-uid="${player.uid}"]`)
     if (!row) return
 
-    const isMe      = player.uid === this.user.$id
-    const isMyTurn  = this._isPlayersTurn(player, s)
+    const isMe       = player.uid === this.user.$id
+    const hasTurn    = this._hasPendingTurn(player, s)
+    const isMyTurn   = hasTurn && isMe
 
     // Update row classes
     row.className = [
       'uk-card uk-card-body uk-padding-small uk-margin-small-bottom player-row',
       isMe      ? 'player-row-me'   : 'player-row-other',
-      isMyTurn  ? 'player-row-turn' : '',
+      hasTurn   ? 'player-row-turn' : '',
       player.folded ? 'player-row-folded' : '',
     ].filter(Boolean).join(' ')
 
@@ -147,6 +157,15 @@ export class TableView {
             this._cardHTML(player.uid, card, imgs.length + i, isMe))
         })
       }
+    }
+
+    const chipBadge = row.querySelector('.chip-badge')
+    if (chipBadge) chipBadge.textContent = this.users[player.uid]?.chips ?? '?'
+
+    const pip = row.querySelector('.turn-pip, .turn-pip-empty')
+    if (pip) {
+      pip.className = hasTurn ? 'turn-pip uk-margin-small-right' : 'turn-pip-empty uk-margin-small-right'
+      pip.textContent = hasTurn ? '●' : ''
     }
 
     const inner   = row.querySelector('.player-drawer-inner')
@@ -204,7 +223,8 @@ export class TableView {
 
   _playerHTML(player, s) {
     const isMe       = player.uid === this.user.$id
-    const isMyTurn   = this._isPlayersTurn(player, s)
+    const hasTurn    = this._hasPendingTurn(player, s)
+    const isMyTurn   = hasTurn && isMe
     const isExpanded = isMyTurn || this._expandedUids.has(player.uid)
     const chips      = this.users[player.uid]?.chips ?? '?'
     const hasButton  = player.uid === s.button
@@ -213,7 +233,7 @@ export class TableView {
     const rowClass = [
       'uk-card uk-card-body uk-padding-small uk-margin-small-bottom player-row',
       isMe      ? 'player-row-me'   : 'player-row-other',
-      isMyTurn  ? 'player-row-turn' : '',
+      hasTurn   ? 'player-row-turn' : '',
       player.folded ? 'player-row-folded' : '',
     ].filter(Boolean).join(' ')
 
@@ -227,7 +247,7 @@ export class TableView {
              data-toggle-uid="${isMe ? player.uid : ''}">
           <div class="uk-flex uk-flex-middle player-row-left">
           ${this._dealBtns(player.uid)}
-            ${isMyTurn  ? '<span class="turn-pip uk-margin-small-right" title="Your turn">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
+            ${hasTurn ? '<span class="turn-pip uk-margin-small-right" title="Waiting for action">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
             ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" title="Dealer button">D</span>' : ''}
             <span class="uk-text-bold player-name">${player.name}</span>
             ${isDealer  ? '<span class="uk-text-muted uk-margin-small-left uk-text-small">(host)</span>' : ''}
@@ -381,9 +401,13 @@ export class TableView {
         <div id="bet-round-options" class="uk-margin-small-top uk-flex uk-flex-middle" style="gap:6px" hidden>
           <span class="uk-text-small uk-text-muted">Start with:</span>
           <select id="bet-start-with" class="uk-select uk-form-small" style="width:160px">
-            ${s.players.filter(p => !p.folded).map(p =>
-              `<option value="${p.uid}">${p.name}</option>`
-            ).join('')}
+            ${(() => {
+              const unfolded = s.players.filter(p => !p.folded)
+              const btnIdx   = unfolded.findIndex(p => p.uid === s.button)
+              const start    = btnIdx === -1 ? 0 : (btnIdx + 1) % unfolded.length
+              return [...unfolded.slice(start), ...unfolded.slice(0, start)]
+                .map(p => `<option value="${p.uid}">${p.name}</option>`).join('')
+            })()}
           </select>
           <button class="uk-button uk-button-primary uk-button-small" data-action="bet-round-go">Go</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="bet-round-cancel">Cancel</button>
@@ -626,7 +650,7 @@ export class TableView {
       if (amount > 0) {
         modal.hide()
         submit.removeEventListener('click', handler)
-        buyChips(uid, amount).then(() => this._refreshUsers().then(() => this._render()))
+        this._mutate(() => buyChips(uid, amount).then(() => this._refreshUsers().then(() => this._render())))
       }
     }
     submit.addEventListener('click', handler)
@@ -710,12 +734,16 @@ export class TableView {
     return this.state && this.user && this.state.dealer === this.user.$id
   }
 
-  _isPlayersTurn(player, state) {
+  _hasPendingTurn(player, state) {
     if (!state.round?.requests) return false
     const req = state.round.requests.find(r => r.uid === player.uid)
     if (!req || !req.turn) return false
     if (state.round.type === 'pass' && req.committedPass) return false
-    return player.uid === this.user.$id
+    return true
+  }
+
+  _isMyTurn(player, state) {
+    return this._hasPendingTurn(player, state) && player.uid === this.user.$id
   }
 
   _toggleDrawer(uid) {
