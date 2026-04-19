@@ -626,7 +626,7 @@ export class TableView {
       if (amount > 0) {
         modal.hide()
         submit.removeEventListener('click', handler)
-        this._mutate(() => buyChips(uid, amount))
+        buyChips(uid, amount).then(() => this._refreshUsers().then(() => this._render()))
       }
     }
     submit.addEventListener('click', handler)
@@ -634,25 +634,71 @@ export class TableView {
   }
 
   _showEndGameDialog() {
-    const pot     = this.state.pot
-    const players = this.state.players.filter(p => !p.folded)
+    const s       = this.state
+    const pot     = s.pot
+    const players = s.players.filter(p => !p.folded)
     document.getElementById('eg-pot-label').textContent = `Pot: ${pot} chips`
-    const sel = document.getElementById('eg-winner')
-    sel.innerHTML = players.map(p => `<option value="${p.uid}">${p.name}</option>`).join('')
+
+    const opts = players.map(p => `<option value="${p.uid}">${p.name}</option>`).join('')
+    const form = document.getElementById('eg-form')
+
+    if (s.hasHiLo || s.hasHiLoBoth) {
+      form.innerHTML = `
+        <div class="uk-margin">
+          <label class="uk-form-label">High winner</label>
+          <select id="eg-high" class="uk-select">${opts}</select>
+        </div>
+        <div class="uk-margin">
+          <label class="uk-form-label">Low winner</label>
+          <select id="eg-low" class="uk-select">${opts}</select>
+        </div>
+      `
+    } else {
+      form.innerHTML = `
+        <div class="uk-margin">
+          <label class="uk-form-label">Winner</label>
+          <select id="eg-winner" class="uk-select">${opts}</select>
+        </div>
+      `
+    }
 
     const modal  = UIkit.modal('#modal-end-game')
     const submit = document.getElementById('eg-submit')
     const handler = () => {
-      const uid    = sel.value
-      const winner = players.find(p => p.uid === uid)
       modal.hide()
       submit.removeEventListener('click', handler)
-      this._mutate(() => TableMutations.endGame(
-        this.tableId,
-        { players: { w: { uid: winner.uid, name: winner.name, winnings: pot } },
-          lastAction: `${winner.name} wins ${pot} chips.` },
-        { w: { uid: winner.uid, name: winner.name, winnings: pot } }
-      ))
+
+      let winnerChipMap = {}
+      let lastAction    = ''
+
+      const credit = (uid, amount) => {
+        const name = players.find(p => p.uid === uid).name
+        if (winnerChipMap[uid]) winnerChipMap[uid].winnings += amount
+        else winnerChipMap[uid] = { uid, name, winnings: amount }
+      }
+
+      if (s.hasHiLo || s.hasHiLoBoth) {
+        const highUid = document.getElementById('eg-high').value
+        const lowUid  = document.getElementById('eg-low').value
+        if (highUid === lowUid) {
+          credit(highUid, pot)
+          lastAction = `${players.find(p => p.uid === highUid).name} wins high and low — takes ${pot} chips.`
+        } else {
+          const half = Math.floor(pot / 2)
+          credit(highUid, pot - half)  // high gets remainder on odd pot
+          credit(lowUid,  half)
+          const hn = players.find(p => p.uid === highUid).name
+          const ln = players.find(p => p.uid === lowUid).name
+          lastAction = `${hn} wins high (${pot - half}), ${ln} wins low (${half}).`
+        }
+      } else {
+        const uid    = document.getElementById('eg-winner').value
+        const winner = players.find(p => p.uid === uid)
+        credit(uid, pot)
+        lastAction = `${winner.name} wins ${pot} chips.`
+      }
+
+      this._mutate(() => TableMutations.endGame(this.tableId, { lastAction }, winnerChipMap))
     }
     submit.addEventListener('click', handler)
     modal.show()
