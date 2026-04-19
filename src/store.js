@@ -109,7 +109,7 @@ export async function updateUserName(uid, name) {
 async function applyChipDelta(uid, delta) {
   const user = await getUser(uid)
   return databases.updateDocument(DB_ID, USERS_COLLECTION, uid, {
-    chips: user.chips + delta,
+    chips: Math.max(0, user.chips + delta),
   })
 }
 

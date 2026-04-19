@@ -149,14 +149,21 @@ export class TableView {
       }
     }
 
-    // Update round drawer if it's open and it's a system round
-    if (isMyTurn && s.round) {
-      const inner = row.querySelector('.player-drawer-inner')
-      const wrapper = row.querySelector('.player-drawer-wrapper')
-      if (inner && wrapper) {
+    const inner   = row.querySelector('.player-drawer-inner')
+    const wrapper = row.querySelector('.player-drawer-wrapper')
+    if (inner && wrapper) {
+      const hasRoundContent = !!inner.querySelector('[data-action="ante-pay"],[data-action="ante-fold"],[data-action="bet-go"],[data-action="bet-fold"],[data-action="pass-go"],[data-action="declare"]')
+      if (isMyTurn && s.round) {
         inner.innerHTML = this._roundActionsHTML(player, s.round)
         wrapper.classList.add('open')
         this._expandedUids.add(player.uid)
+      } else if (hasRoundContent) {
+        // Turn ended — clear stale round UI
+        inner.innerHTML = isMe ? this._userActionsHTML(player) : ''
+        if (!isMe) {
+          wrapper.classList.remove('open')
+          this._expandedUids.delete(player.uid)
+        }
       }
     }
   }
@@ -261,13 +268,18 @@ export class TableView {
     const req = round.requests?.find(r => r.uid === player.uid)
     if (!req || !req.turn) return ''
 
-    if (round.type === 'ante') return `
-      <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message || `Ante: ${req.chips} chips`}</div>
-      <button class="uk-button uk-button-primary uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">
-        Ante ${req.chips}
-      </button>
-      <button class="uk-button uk-button-danger uk-button-small uk-margin-small-left" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
-    `
+    if (round.type === 'ante') {
+      const s = this.state
+      const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
+      return `
+        <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message || `Ante: ${req.chips} chips`}</div>
+        <div class="uk-flex uk-flex-middle" style="gap:6px">
+          <button class="uk-button uk-button-primary uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
+          <button class="uk-button uk-button-danger uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
+          ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
+        </div>
+      `
+    }
 
     if (round.type === 'bet') {
       const chips = req.chips

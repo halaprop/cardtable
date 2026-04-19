@@ -63,7 +63,7 @@ export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasH
     hasPassing: !!hasPassing, hasHiLo: !!hasHiLo, hasHiLoBoth: !!hasHiLoBoth, allowBuyIn: !!allowBuyIn,
     button: button ?? state.button,
     cards: [], deck: deck.toJSON(),
-    players, pot: state.pot ?? 0,
+    players, pot: 0,
     bigBlind, round, lastAction,
   }
 }
