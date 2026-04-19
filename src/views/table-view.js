@@ -502,6 +502,20 @@ export class TableView {
       case 'pass-go': {
         const selected = [...(this._selectedCards[uid] ?? [])]
         const pass     = selected.map(i => this.state.players.find(p => p.uid === uid).cards[i])
+        const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
+        selected.forEach(i => {
+          const cardEl = row?.querySelector(`[data-card-index="${i}"]`)
+          if (!cardEl) return
+          const slot = cardEl.parentElement
+          slot.style.width    = slot.offsetWidth + 'px'
+          slot.style.overflow = 'hidden'
+          cardEl.classList.add('card-discarding')
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            slot.style.transition = 'width 200ms ease-out, margin-right 200ms ease-out'
+            slot.style.width       = '0'
+            slot.style.marginRight = '0'
+          }))
+        })
         this._selectedCards[uid] = new Set()
         return this._mutate(() => TableMutations.passingReply(this.tableId, { uid, pass }))
       }

@@ -235,20 +235,22 @@ export function passingRound(state, { cardCount, stepCount }) {
 export function passingReply(state, { uid, pass }) {
   const round   = structuredClone(state.round)
   const request = round.requests.find(r => r.uid === uid)
-  request.passed          = pass
-  request.committedPass   = true
+  request.passed        = pass
+  request.committedPass = true
+
+  // Remove passed cards from sender immediately so the UI reflects it right away
+  const players = structuredClone(state.players)
+  const from    = players.find(p => p.uid === uid)
+  from.cards    = from.cards.filter(c => !pass.find(p => _cardsEqual(c, p)))
 
   if (!round.requests.every(r => r.committedPass)) {
-    return { tableUpdates: { round }, chipDeltas: [] }
+    return { tableUpdates: { round, players }, chipDeltas: [] }
   }
 
-  // all committed — swap cards
-  const players = structuredClone(state.players)
+  // all committed — deliver cards to recipients
   round.requests.forEach(req => {
-    const from = players.find(p => p.uid === req.uid)
-    const to   = players.find(p => p.uid === req.toPlayer.uid)
-    to.cards   = [...to.cards, ...req.passed]
-    from.cards = from.cards.filter(c => !req.passed.find(p => _cardsEqual(c, p)))
+    const to = players.find(p => p.uid === req.toPlayer.uid)
+    to.cards = [...to.cards, ...req.passed.map(c => ({ ...c, faceUp: false }))]
   })
   return { tableUpdates: { round: null, players, lastAction: 'Passes complete.' }, chipDeltas: [] }
 }

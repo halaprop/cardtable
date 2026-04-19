@@ -351,10 +351,12 @@ describe('passingReply', () => {
 
   it('waits when only one player has committed', () => {
     const s = passState()
-    const pass = [s.players[0].cards[0]]
+    const pass = [s.players[0].cards[0]] // Ace
     const { tableUpdates } = passingReply(s, { uid: 'p1', pass })
     expect(tableUpdates.round).not.toBeNull()
     expect(tableUpdates.round.requests.find(r => r.uid === 'p1').committedPass).toBe(true)
+    // card is removed from sender's hand immediately
+    expect(tableUpdates.players.find(p => p.uid === 'p1').cards.some(c => c.rank === 'A')).toBe(false)
   })
 
   it('swaps cards when all players commit', () => {
