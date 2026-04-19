@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="316 0 76.5 76.504" version="1.1">
+  <g transform="translate(-41.39 -42.68)">
+    <g
+        id="g2268"
+        transform="matrix(.5 0 0 .5 251.64 -95.497)"
+      >
+      <rect
+          id="rect2270"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#ffffff"
+          rx="50"
+          ry="50"
+          height="150"
+          width="150"
+          y="277.86"
+          x="213"
+      />
+      <path
+          id="path2272"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#000000"
+          d="m337.5 227.36c0 6.9036-5.5964 12.5-12.5 12.5s-12.5-5.5964-12.5-12.5 5.5964-12.5 12.5-12.5 12.5 5.5964 12.5 12.5z"
+          transform="translate(-73.5,89)"
+      />
+      <path
+          id="path2274"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#000000"
+          d="m337.5 227.36c0 6.9036-5.5964 12.5-12.5 12.5s-12.5-5.5964-12.5-12.5 5.5964-12.5 12.5-12.5 12.5 5.5964 12.5 12.5z"
+          transform="translate(-73.5,161)"
+      />
+      <path
+          id="path2276"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#000000"
+          d="m337.5 227.36c0 6.9036-5.5964 12.5-12.5 12.5s-12.5-5.5964-12.5-12.5 5.5964-12.5 12.5-12.5 12.5 5.5964 12.5 12.5z"
+          transform="translate(-1.5,89)"
+      />
+      <path
+          id="path2278"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#000000"
+          d="m337.5 227.36c0 6.9036-5.5964 12.5-12.5 12.5s-12.5-5.5964-12.5-12.5 5.5964-12.5 12.5-12.5 12.5 5.5964 12.5 12.5z"
+          transform="translate(-1.5,161)"
+      />
+      <path
+          id="path2280"
+          style="color:#000000;fill-rule:evenodd;stroke:#000000;stroke-width:3;fill:#000000"
+          d="m337.5 227.36c0 6.9036-5.5964 12.5-12.5 12.5s-12.5-5.5964-12.5-12.5 5.5964-12.5 12.5-12.5 12.5 5.5964 12.5 12.5z"
+          transform="translate(-37.5,125)"
+      />
+    </g
+    >
+  </g>
+</svg>

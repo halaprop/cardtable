@@ -53,7 +53,14 @@ export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasH
     })
   }
 
-  deck.dealPattern(pattern ?? '', players, true)
+  if (diceGame) {
+    const faces = (pattern ?? '').toLowerCase().split('').filter(f => f === 'u' || f === 'd')
+    players.forEach(p => {
+      p.cards = faces.map(f => Card.die(f === 'u').toJSON())
+    })
+  } else {
+    deck.dealPattern(pattern ?? '', players, true)
+  }
 
   const lastAction = customAction
     ?? `The game is "${gameName}". ${anteParts.length ? 'Please ante.' : 'No ante.'}`

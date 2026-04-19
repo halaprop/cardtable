@@ -140,7 +140,8 @@ export class TableView {
         const img = imgs[i]
         if (!img) return
         const showFace = card.faceUp || isMe
-        const newSrc   = showFace ? this._cardFileName(card) : 'cards/2B.svg'
+        const backSrc  = card.suit === 'dice' ? 'cards/die-back.svg' : 'cards/2B.svg'
+        const newSrc   = showFace ? this._cardFileName(card) : backSrc
         if (img.src !== newSrc && !img.src.endsWith(newSrc)) img.src = newSrc
 
         const selected = this._selectedCards[player.uid]?.has(i)
@@ -189,6 +190,7 @@ export class TableView {
 
   _dealBtns(uid) {
     if (!this._isDealer()) return ''
+    if (uid === 'table' && this.state?.diceGame) return ''
     return `
       <div class="deal-btns">
         <button class="deal-btn" data-action="deal-down" data-deal-uid="${uid}" title="Deal face down">↓</button>
@@ -209,11 +211,11 @@ export class TableView {
             Pot: <strong>${s.pot}</strong>
           </div>
         </div>
-        <div class="uk-text-small uk-text-muted uk-margin-small-top last-action">${s.lastAction || ''}</div>
+        <div class="uk-text-small uk-text-muted uk-margin-small-top last-action">${s.lastAction === 'show-dice-counts' ? '' : (s.lastAction || '')}</div>
         <div class="uk-flex uk-flex-middle player-row-main uk-margin-small-top">
           <div class="player-row-left">${this._dealBtns('table')}</div>
           <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
-            ${s.cards?.length ? this._cardsHTML('table', s.cards, false) : ''}
+            ${s.lastAction === 'show-dice-counts' ? this._diceCountsHTML(s) : (s.cards?.length ? this._cardsHTML('table', s.cards, false) : '')}
           </div>
           <div class="player-row-right"></div>
         </div>
@@ -276,12 +278,14 @@ export class TableView {
   _cardHTML(uid, card, i, isMe) {
     const selected  = this._selectedCards[uid] ?? new Set()
     const showFace  = card.faceUp || isMe
-    const src       = showFace ? this._cardFileName(card) : 'cards/2B.svg'
+    const backSrc   = card.suit === 'dice' ? 'cards/die-back.svg' : 'cards/2B.svg'
+    const src       = showFace ? this._cardFileName(card) : backSrc
     const selClass  = isMe && selected.has(i) ? 'card-thumb-selected' : ''
     const visClass  = isMe && !card.faceUp ? 'card-thumb-private' : card.faceUp ? 'card-thumb-public' : ''
     const dataAttr  = isMe ? `data-card-uid="${uid}" data-card-index="${i}"` : ''
     const title     = card.faceUp ? this._friendlyName(card) : isMe ? 'private (only you can see this)' : 'face down'
-    return `<span class="card-slot"><img class="card-thumb ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}"></span>`
+    const dieClass  = card.suit === 'dice' ? 'die-thumb' : ''
+    return `<span class="card-slot"><img class="card-thumb ${dieClass} ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}"></span>`
   }
 
   _roundActionsHTML(player, round) {
@@ -386,10 +390,15 @@ export class TableView {
         <div class="uk-flex uk-flex-between" style="gap:6px">
           <div class="uk-flex uk-flex-wrap" style="gap:6px">
             ${b('New Game',    'new-game',    'uk-button-primary',   false)}
-            ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
-            ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame) : ''}
-            ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame) : ''}
-            ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame) : ''}
+            ${s.diceGame ? `
+              ${b('Reroll',         'reroll',        'uk-button-default', !hasPlayers || noGame)}
+              ${b('Reveal & Count', 'reveal-count',  'uk-button-default', !hasPlayers || noGame)}
+            ` : `
+              ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
+              ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame) : ''}
+              ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame) : ''}
+              ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame) : ''}
+            `}
           </div>
           <div class="uk-flex" style="gap:6px">
             ${b('End Game',    'end-game',    'uk-button-secondary', noGame)}
@@ -561,6 +570,8 @@ export class TableView {
         break
       case 'declare-hl':   return this._mutate(() => TableMutations.declareRound(this.tableId, { options: ['high', 'low'] }))
       case 'declare-hlb':  return this._mutate(() => TableMutations.declareRound(this.tableId, { options: ['high', 'low', 'both'] }))
+      case 'reroll':       return this._mutate(() => TableMutations.reroll(this.tableId))
+      case 'reveal-count': return this._mutate(() => TableMutations.revealAndCount(this.tableId))
       case 'johnny-drama': return this._mutate(() => TableMutations.johnnyDrama(this.tableId))
 
       default:
@@ -790,6 +801,19 @@ export class TableView {
     if (!this._selectedCards[uid]) this._selectedCards[uid] = new Set()
     const s = this._selectedCards[uid]
     s.has(index) ? s.delete(index) : s.add(index)
+  }
+
+  _diceCountsHTML(s) {
+    const counts = { 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }
+    s.players.forEach(p => p.cards.forEach(c => { if (c.suit === 'dice') counts[c.rank]++ }))
+    return `<div class="uk-flex uk-flex-middle" style="gap:28px">
+      ${[1,2,3,4,5,6].map(v => `
+        <span class="uk-flex uk-flex-middle" style="gap:6px">
+          <span style="color:rgba(255,255,255,0.82);font-size:1.3em;font-weight:700">${counts[v]}</span>
+          <img src="cards/die-${v}.svg" style="width:2.2em;height:2.2em">
+        </span>
+      `).join('')}
+    </div>`
   }
 
   _cardFileName(card) {
