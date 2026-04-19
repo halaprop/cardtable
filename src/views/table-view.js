@@ -258,8 +258,8 @@ export class TableView {
              data-toggle-uid="${isMe ? player.uid : ''}">
           <div class="uk-flex uk-flex-middle player-row-left">
           ${this._dealBtns(player.uid)}
-            ${hasTurn ? '<span class="turn-pip uk-margin-small-right" title="Waiting for action">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
-            ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" title="Dealer button">D</span>' : ''}
+            ${hasTurn ? '<span class="turn-pip uk-margin-small-right" uk-tooltip="Your turn — open your row to act">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
+            ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" uk-tooltip="Dealer button — this player acts last">D</span>' : ''}
             <span class="uk-text-bold player-name">${player.name}</span>
             ${isDealer  ? '<span class="uk-text-muted uk-margin-small-left uk-text-small">(host)</span>' : ''}
           </div>
@@ -292,7 +292,7 @@ export class TableView {
     const selClass  = isMe && selected.has(i) ? 'card-thumb-selected' : ''
     const visClass  = isMe && !card.faceUp ? 'card-thumb-private' : card.faceUp ? 'card-thumb-public' : ''
     const dataAttr  = isMe ? `data-card-uid="${uid}" data-card-index="${i}"` : ''
-    const title     = card.faceUp ? this._friendlyName(card) : isMe ? 'private (only you can see this)' : 'face down'
+    const title     = card.faceUp ? this._friendlyName(card) : isMe ? `${this._friendlyName(card)} — only you can see this` : 'face down'
     const dieClass  = card.suit === 'dice' ? 'die-thumb' : ''
     return `<span class="card-slot"><img class="card-thumb ${dieClass} ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}"></span>`
   }
@@ -305,10 +305,10 @@ export class TableView {
       const s = this.state
       const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
       return `
-        <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message || `Ante: ${req.chips} chips`}</div>
+        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message || `Ante: ${req.chips} chips`}</div>
         <div class="uk-flex uk-flex-middle" style="gap:6px">
-          <button class="uk-button uk-button-primary uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
-          <button class="uk-button uk-button-danger uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
+          <button class="uk-button uk-button-default uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
+          <button class="uk-button uk-button-default uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
           ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
         </div>
       `
@@ -317,13 +317,13 @@ export class TableView {
     if (round.type === 'bet') {
       const chips = req.chips
       return `
-        <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message || 'Your bet'}</div>
+        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message || 'Your bet'}</div>
         <div class="uk-flex uk-flex-middle">
           <input id="bet-input" class="uk-input uk-form-small uk-width-small" type="number" min="${chips}" value="${chips}" placeholder="chips">
-          <button class="uk-button uk-button-primary uk-button-small uk-margin-small-left" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
+          <button class="uk-button uk-button-default uk-button-small uk-margin-small-left" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
             ${chips === 0 ? 'Check / Bet' : 'Call / Raise'}
           </button>
-          <button class="uk-button uk-button-danger uk-button-small uk-margin-small-left" data-action="bet-fold" data-uid="${player.uid}">Fold</button>
+          <button class="uk-button uk-button-default uk-button-small uk-margin-small-left" data-action="bet-fold" data-uid="${player.uid}">Fold</button>
         </div>
       `
     }
@@ -335,9 +335,10 @@ export class TableView {
       const needed = req.cardCount
       const sel    = this._selectedCards[player.uid]?.size ?? 0
       return `
-        <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message}</div>
+        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message}</div>
         <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Click your cards above to select them (${sel}/${needed} selected)</div>
-        <button class="uk-button uk-button-primary uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
+        <button class="uk-button uk-button-default uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
+          uk-tooltip="Pass your selected cards to the player after you"
           ${sel !== needed ? 'disabled' : ''}>Pass</button>
       `
     }
@@ -370,22 +371,23 @@ export class TableView {
         </div>
         <div class="uk-flex uk-flex-middle" style="gap:6px">
           ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
-          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}">Stand Up</button>
+          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table">Stand Up</button>
         </div>
       </div>
     `
   }
 
-  _dealerBtn(label, action, variant, disabled) {
+  _dealerBtn(label, action, variant, disabled, tooltip = '') {
+    const tip = tooltip ? ` uk-tooltip="${tooltip}"` : ''
     if (disabled) {
       return `<button class="uk-button uk-button-small" data-action="${action}" data-disabled="1"
-        style="color:rgba(255,255,255,0.38);background:transparent;border:1px solid rgba(255,255,255,0.15);cursor:default">${label}</button>`
+        style="color:rgba(255,255,255,0.38);background:transparent;border:1px solid rgba(255,255,255,0.15);cursor:default"${tip}>${label}</button>`
     }
     if (variant === 'uk-button-default') {
       return `<button class="uk-button ${variant} uk-button-small" data-action="${action}"
-        style="color:#fff;background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.35)">${label}</button>`
+        style="color:#fff;background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.35)"${tip}>${label}</button>`
     }
-    return `<button class="uk-button ${variant} uk-button-small" data-action="${action}">${label}</button>`
+    return `<button class="uk-button ${variant} uk-button-small" data-action="${action}"${tip}>${label}</button>`
   }
 
   _dealerControlsHTML(s) {
@@ -398,20 +400,20 @@ export class TableView {
         <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Dealer Controls</div>
         <div class="uk-flex uk-flex-between" style="gap:6px">
           <div class="uk-flex uk-flex-wrap" style="gap:6px">
-            ${b('New Game',    'new-game',    'uk-button-primary',   false)}
+            ${b('New Game',    'new-game',    'uk-button-primary',   false,          'Start a new hand — choose game type and other settings')}
             ${s.diceGame ? `
-              ${b('Reroll',         'reroll',        'uk-button-default', !hasPlayers || noGame)}
-              ${b('Reveal & Count', 'reveal-count',  'uk-button-default', !hasPlayers || noGame)}
+              ${b('Reroll',         'reroll',        'uk-button-default', !hasPlayers || noGame, 'Reroll all dice')}
+              ${b('Reveal & Count', 'reveal-count',  'uk-button-default', !hasPlayers || noGame, 'Flip all dice face-up and show totals')}
             ` : `
-              ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame)}
-              ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame) : ''}
-              ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame) : ''}
-              ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame) : ''}
+              ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame, 'Start a betting round, beginning after the dealer button')}
+              ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame, 'Players pass cards to the player after them — set card count and how many seats forward') : ''}
+              ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame, 'Start a hi/lo declaration round — players secretly declare high or low; pot splits by result') : ''}
+              ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame, 'Start a hi/lo declaration round — players can declare high, low, or both; pot splits by result') : ''}
             `}
           </div>
           <div class="uk-flex" style="gap:6px">
-            ${b('End Game',    'end-game',    'uk-button-secondary', noGame)}
-            ${b('Johnny Drama','johnny-drama','uk-button-danger',    false)}
+            ${b('End Game',    'end-game',    'uk-button-secondary', noGame,         'End the hand and award the pot')}
+            ${b('Johnny Drama','johnny-drama','uk-button-danger',    false,          "Everyone get the f*ck out!")}
           </div>
         </div>
 

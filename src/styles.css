@@ -79,7 +79,7 @@
 
 .player-row-me    { background: #f0f4f0 !important; }
 .player-row-other { background: #e8e8e8 !important; }
-.player-row-turn  { border-left-color: #f0a500 !important; }
+.player-row-turn  { border-left-color: #1e87f0 !important; } /* UIKit primary */
 .player-row-folded { opacity: 0.45; }
 
 .player-row-main  { width: 100%; }
@@ -89,12 +89,15 @@
 
 .player-name { font-size: 1.1em; }
 
-.turn-pip       { color: #f0a500; font-size: 1.2em; line-height: 1; }
+.turn-pip       { color: #1e87f0; font-size: 1.2em; line-height: 1; } /* UIKit primary */
 .turn-pip-empty { display: inline-block; width: 1em; }
+.turn-prompt    { color: #1e87f0; } /* UIKit primary */
 
 .dealer-btn {
-  background: #1e87f0 !important;
+  background: #f0a500 !important;
+  color: #222 !important;
   font-size: 0.75em;
+  font-weight: bold;
 }
 
 .chip-badge {
