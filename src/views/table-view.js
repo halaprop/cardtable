@@ -1,4 +1,5 @@
 import { TableMutations, subscribeTable, subscribeUsers, getUser, listUsers, buyChips } from '../store.js'
+import { calcDiceSplits, calcCardSplits } from '../model/splits.js'
 import { Debug } from '../debug.js'
 
 export class TableView {
@@ -682,15 +683,7 @@ export class TableView {
     const sel     = {}
 
     const places = Math.min(3, players.length)
-    const sp = gs.diceGame ? (() => {
-      if (places === 1) return { '1st': pot }
-      if (places === 2) { const a = Math.ceil(pot * 0.6); return { '1st': a, '2nd': pot - a } }
-      const a = Math.ceil(pot * 0.6), b = Math.ceil(pot * 0.25)
-      return { '1st': a, '2nd': b, '3rd': pot - a - b }
-    })() : (() => {
-      const h = Math.ceil(pot / 2), l = Math.floor(pot / 2)
-      return { w: pot, h, l, hh: Math.ceil(h/2), hl: Math.floor(h/2), lh: Math.ceil(l/2), ll: Math.floor(l/2) }
-    })()
+    const sp = gs.diceGame ? calcDiceSplits(pot, places) : calcCardSplits(pot)
 
     const takenUids = (exceptKey) => Object.entries(sel)
       .filter(([k, v]) => k !== exceptKey && v && v !== 'split')
