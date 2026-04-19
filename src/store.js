@@ -150,7 +150,7 @@ export const TableMutations = {
   bettingRound:   (tableId, params) => applyMutation(tableId, s => M.bettingRound(s, params)),
   bettingReply:   (tableId, params) => applyMutationWithChips(tableId, s => M.bettingReply(s, params)),
   passingRound:   (tableId, params) => applyMutation(tableId, s => M.passingRound(s, params)),
-  passingReply:   (tableId, params) => applyMutation(tableId, s => M.passingReply(s, params)),
+  passingReply:   (tableId, params) => applyMutationWithChips(tableId, s => M.passingReply(s, params)),
   declareRound:   (tableId, params) => applyMutation(tableId, s => M.declareRound(s, params)),
   declareReply:   (tableId, params) => applyMutation(tableId, s => M.declareReply(s, params)),
   fold:           (tableId, params) => applyMutation(tableId, s => M.fold(s, params)),
