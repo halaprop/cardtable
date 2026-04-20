@@ -269,14 +269,16 @@ export function declareRound(state, { options }) {
 export function declareReply(state, { uid, option }) {
   const round   = structuredClone(state.round)
   const request = round.requests.find(r => r.uid === uid)
-  request.turn  = false
-
-  const players = structuredClone(state.players)
-  const player  = players.find(p => p.uid === uid)
-  player.cards  = [...player.cards, Card.declaration(option).toJSON()]
+  request.turn   = false
+  request.option = option
 
   const allDone = round.requests.every(r => !r.turn)
-  return { round: allDone ? null : round, players, lastAction: allDone ? 'Declarations complete.' : state.lastAction }
+  if (!allDone) return { round, lastAction: state.lastAction }
+
+  const summary = round.requests
+    .map(r => `${state.players.find(p => p.uid === r.uid)?.name}: ${r.option}`)
+    .join(' · ')
+  return { round: null, lastAction: `Declarations — ${summary}` }
 }
 
 export function fold(state, { uid }) {

@@ -138,11 +138,19 @@ test('pass round: cards leave sender immediately, arrive in correct hands after 
   await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
 })
 
-test('hi/lo declaration story: 4 players, dealer initiates, pips clear as each declares, declaration cards appear in every hand', async ({ page }) => {
+test('hi/lo declaration story: pips clear as each declares, summary in lastAction, end game dialog shows split', async ({ page }) => {
   const users = makeUsers(ALICE, BOB, CAROL, DAVE)
   const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
 
-  await g.startGame({ pattern: 'ddd', hasHiLo: true })
+  // 5-chip ante → pot = 20; calcCardSplits(20) = { w:20, h:10, l:10 }
+  await g.startGame({ pattern: 'ddd', hasHiLo: true, ante: 5 })
+
+  await g.ante(ALICE.$id, 5)
+  await g.ante(BOB.$id, 5)
+  await g.ante(CAROL.$id, 5)
+  await g.ante(DAVE.$id, 5)
+
+  expect((await g.state()).pot).toBe(20)
 
   // ── Dealer initiates Hi/Lo declaration via UI controls ───────────────────
   await g.clickDeclareRound('hl')
@@ -187,22 +195,109 @@ test('hi/lo declaration story: 4 players, dealer initiates, pips clear as each d
   for (const p of [ALICE, BOB, CAROL, DAVE]) {
     await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
   }
-  expect((await g.state()).round).toBeNull()
 
-  // Each player has 4 cards: their original 3 + 1 declaration card
+  const final = await g.state()
+  expect(final.round).toBeNull()
+
+  // No declaration cards — hands stay at 3
   for (const p of [ALICE, BOB, CAROL, DAVE]) {
-    await expect(g.playerCards(p.$id)).toHaveCount(4)
+    await expect(g.playerCards(p.$id)).toHaveCount(3)
   }
 
-  // ── Correct declarations in every hand ───────────────────────────────────
-  const final = await g.state()
-  const decl  = uid => final.players.find(p => p.uid === uid).cards
-                         .find(c => c.suit === 'declaration')
+  // Declarations are summarised in lastAction
+  expect(final.lastAction).toContain('Alice: high')
+  expect(final.lastAction).toContain('Bob: low')
+  expect(final.lastAction).toContain('Carol: high')
+  expect(final.lastAction).toContain('Dave: low')
 
-  expect(decl(ALICE.$id)?.rank).toBe('high')
-  expect(decl(BOB.$id)?.rank).toBe('low')
-  expect(decl(CAROL.$id)?.rank).toBe('high')
-  expect(decl(DAVE.$id)?.rank).toBe('low')
+  // ── End game dialog: split pot between Alice (high) and Bob (low) ─────────
+  await g.clickEndGame()
+  expect(await g.endGamePotLabel()).toBe('Pot: 20 chips')
+
+  // Select split — high/low dropdowns appear
+  await g.endGameSelect('w', 'split')
+  await expect(page.locator('#eg-form select[data-key="h"]')).toBeVisible()
+  await expect(page.locator('#eg-form select[data-key="l"]')).toBeVisible()
+
+  await g.endGameSelect('h', ALICE.$id)  // Alice wins high (10)
+  await g.endGameSelect('l', BOB.$id)    // Bob wins low (10)
+
+  expect(await g.endGamePreview()).toBe('Alice wins high (10), Bob wins low (10)')
+
+  await g.endGamePayOut()
+
+  const ended = await g.state()
+  expect(ended.gameOn).toBe(false)
+  expect(ended.round).toBeNull()
+})
+
+test('hi/lo/both declaration story: "both" option available, summary includes declarations, end game split dialog works', async ({ page }) => {
+  const users = makeUsers(ALICE, BOB, CAROL, DAVE)
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
+
+  // 5-chip ante → pot = 20
+  await g.startGame({ pattern: 'ddd', hasHiLo: false, hasHiLoBoth: true, ante: 5 })
+
+  await g.ante(ALICE.$id, 5)
+  await g.ante(BOB.$id, 5)
+  await g.ante(CAROL.$id, 5)
+  await g.ante(DAVE.$id, 5)
+
+  // ── Dealer initiates Hi/Lo/Both declaration ──────────────────────────────
+  await g.clickDeclareRound('hlb')
+
+  const s0 = await g.state()
+  expect(s0.round?.type).toBe('declare')
+  // All requests include 'both' as an option
+  for (const req of s0.round.requests) {
+    expect(req.options).toEqual(['high', 'low', 'both'])
+  }
+
+  // Alice sees all three buttons
+  await expect(page.locator('[data-action="declare"][data-option="high"]')).toBeVisible()
+  await expect(page.locator('[data-action="declare"][data-option="low"]')).toBeVisible()
+  await expect(page.locator('[data-action="declare"][data-option="both"]')).toBeVisible()
+
+  // ── Players declare ──────────────────────────────────────────────────────
+  await g.declare(ALICE.$id, 'high')
+  await g.declare(BOB.$id, 'low')
+  await g.declare(CAROL.$id, 'both')  // Carol goes for both halves
+  await g.declare(DAVE.$id, 'high')   // last declaration — round resolves
+
+  // ── Round resolved ───────────────────────────────────────────────────────
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
+  }
+
+  const final = await g.state()
+  expect(final.round).toBeNull()
+
+  // No extra cards dealt
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerCards(p.$id)).toHaveCount(3)
+  }
+
+  expect(final.lastAction).toContain('Alice: high')
+  expect(final.lastAction).toContain('Bob: low')
+  expect(final.lastAction).toContain('Carol: both')
+  expect(final.lastAction).toContain('Dave: high')
+
+  // ── End game dialog: Carol wins low (declared both), Alice wins high ──────
+  await g.clickEndGame()
+  expect(await g.endGamePotLabel()).toBe('Pot: 20 chips')
+
+  await g.endGameSelect('w', 'split')
+  await expect(page.locator('#eg-form select[data-key="h"]')).toBeVisible()
+
+  await g.endGameSelect('h', ALICE.$id)  // Alice wins high (10)
+  await g.endGameSelect('l', BOB.$id)    // Bob wins low (10)
+
+  expect(await g.endGamePreview()).toBe('Alice wins high (10), Bob wins low (10)')
+
+  await g.endGamePayOut()
+
+  const ended = await g.state()
+  expect(ended.gameOn).toBe(false)
 })
 
 test('pass round story: 4 players, dealer initiates, pips clear as each player commits, correct cards in every hand', async ({ page }) => {

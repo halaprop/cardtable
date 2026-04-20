@@ -171,6 +171,38 @@ export class Game {
     return this
   }
 
+  // ── End game dialog ───────────────────────────────────────────────────────────
+
+  /** Click End Game and wait for the dialog to open */
+  async clickEndGame() {
+    await this.#page.locator('[data-action="end-game"]').click()
+    await this.#page.locator('#eg-pot-label').waitFor({ state: 'visible' })
+    await this.#page.waitForFunction(() => document.getElementById('eg-pot-label')?.textContent.trim() !== '')
+    return this
+  }
+
+  /** Read the pot label text from the open end-game dialog */
+  endGamePotLabel() {
+    return this.#page.locator('#eg-pot-label').textContent()
+  }
+
+  /** Select a value in the end-game form (key = 'w' | 'h' | 'l' | etc.) */
+  async endGameSelect(key, value) {
+    await this.#page.locator(`#eg-form select[data-key="${key}"]`).selectOption(value)
+    return this
+  }
+
+  /** Read the preview text from the open end-game dialog */
+  endGamePreview() {
+    return this.#page.locator('#eg-preview').textContent()
+  }
+
+  /** Click Pay Out to submit the end-game dialog */
+  async endGamePayOut() {
+    await this.#page.locator('#eg-submit').click()
+    return this
+  }
+
   // ── Inspection ────────────────────────────────────────────────────────────────
 
   state() {

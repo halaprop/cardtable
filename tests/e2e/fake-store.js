@@ -52,7 +52,14 @@ export const TableMutations = {
   appoint:          _noop('appoint'),
   moveDealerButton: _noop('moveDealerButton'),
   startGame:        _simple('startGame',        M.startGame),
-  endGame:          _noop('endGame'),
+  endGame:          (tableId, params, _winnerChipMap) => {
+    _mutations.push({ name: 'endGame', tableId, params })
+    if (!_state) return Promise.resolve(null)
+    const updates = M.endGame(_state, params)
+    if (updates) _state = { ..._state, ...updates }
+    _broadcast(_state)
+    return Promise.resolve(_state)
+  },
   massDeal:         _simple('massDeal',         M.massDeal),
   dealOne:          _simple('dealOne',           M.dealOne),
   anteRound:        _simple('anteRound',         M.anteRound),
