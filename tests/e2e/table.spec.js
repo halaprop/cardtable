@@ -214,8 +214,7 @@ test('hi/lo declaration story: pips clear as each declares, summary in lastActio
   await g.clickEndGame()
   expect(await g.endGamePotLabel()).toBe('Pot: 20 chips')
 
-  // Select split — high/low dropdowns appear
-  await g.endGameSelect('w', 'split')
+  // hi/lo game → High and Low winner selects are visible immediately (no manual Split needed)
   await expect(page.locator('#eg-form select[data-key="h"]')).toBeVisible()
   await expect(page.locator('#eg-form select[data-key="l"]')).toBeVisible()
 
@@ -282,12 +281,13 @@ test('hi/lo/both declaration story: "both" option available, summary includes de
   expect(final.lastAction).toContain('Carol: both')
   expect(final.lastAction).toContain('Dave: high')
 
-  // ── End game dialog: Carol wins low (declared both), Alice wins high ──────
+  // ── End game dialog: hi/lo/both game defaults to split view ─────────────
   await g.clickEndGame()
   expect(await g.endGamePotLabel()).toBe('Pot: 20 chips')
 
-  await g.endGameSelect('w', 'split')
+  // hasHiLoBoth → High and Low winner selects visible immediately
   await expect(page.locator('#eg-form select[data-key="h"]')).toBeVisible()
+  await expect(page.locator('#eg-form select[data-key="l"]')).toBeVisible()
 
   await g.endGameSelect('h', ALICE.$id)  // Alice wins high (10)
   await g.endGameSelect('l', BOB.$id)    // Bob wins low (10)

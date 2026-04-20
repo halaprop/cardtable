@@ -692,7 +692,7 @@ export class TableView {
     const preview = document.getElementById('eg-preview')
     const modal   = UIkit.modal('#modal-end-game')
     const submit  = document.getElementById('eg-submit')
-    const sel     = {}
+    const sel     = (gs.hasHiLo || gs.hasHiLoBoth) ? { w: 'split' } : {}
 
     const places = Math.min(3, players.length)
     const sp = gs.diceGame ? calcDiceSplits(pot, places) : calcCardSplits(pot)
