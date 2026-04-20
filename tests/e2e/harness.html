@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="/src/styles.css">
+  <script type="importmap">
+  {
+    "imports": {
+      "/src/store.js": "/tests/e2e/fake-store.js"
+    }
+  }
+  </script>
+</head>
+<body>
+  <div id="view-table">
+    <div id="table-root"></div>
+  </div>
+
+  <!-- Required by debug.js (module-level getElementById) -->
+  <div id="debug-overlay" hidden><div id="debug-content"></div></div>
+
+  <!-- Modal stubs — referenced by dealer action handlers -->
+  <div id="modal-new-game"></div>
+  <div id="modal-end-game"></div>
+  <div id="modal-buy-chips"></div>
+
+  <script type="module" src="/tests/e2e/harness-init.js"></script>
+</body>
+</html>
