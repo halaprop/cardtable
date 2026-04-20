@@ -188,12 +188,8 @@ export class TableView {
         wrapper.classList.add('open')
         this._expandedUids.add(player.uid)
       } else if (hasRoundContent) {
-        // Turn ended — clear stale round UI
+        // Turn ended — clear stale round UI; never close an open drawer
         inner.innerHTML = isMe ? this._userActionsHTML(player) : ''
-        if (!isMe) {
-          wrapper.classList.remove('open')
-          this._expandedUids.delete(player.uid)
-        }
       }
     }
   }
