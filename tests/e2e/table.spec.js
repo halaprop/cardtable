@@ -142,3 +142,87 @@ test('ante-pay fires passingReply mutation with correct uid', async ({ page }) =
   expect(mutation.name).toBe('anteReply')
   expect(mutation.params.uid).toBe('uid-alice')
 })
+
+test('pass round: cards leave sender immediately, arrive in correct hands after both commit', async ({ page }) => {
+  await loadHarness(page)
+
+  // Alice has AS KH QD JC 10S; Bob has 2C 3D 4H 5S 6C.
+  // Each passes 2 cards to the other (stepCount 1 = pass left).
+  const state = baseState({
+    players: [
+      { uid: 'uid-alice', name: 'Alice', folded: false, betCredit: 0,
+        cards: [
+          card('A',  'S'), card('K', 'H'), card('Q', 'D'),
+          card('J',  'C'), card('10','S'),
+        ] },
+      { uid: 'uid-bob', name: 'Bob', folded: false, betCredit: 0,
+        cards: [
+          card('2', 'C'), card('3', 'D'), card('4', 'H'),
+          card('5', 'S'), card('6', 'C'),
+        ] },
+    ],
+    round: {
+      type: 'pass',
+      requests: [
+        { uid: 'uid-alice', cardCount: 2,
+          toPlayer: { uid: 'uid-bob',   name: 'Bob'   },
+          message: 'Choose 2 cards to pass to Bob:',
+          turn: true, passed: [] },
+        { uid: 'uid-bob', cardCount: 2,
+          toPlayer: { uid: 'uid-alice', name: 'Alice' },
+          message: 'Choose 2 cards to pass to Alice:',
+          turn: true, passed: [] },
+      ],
+    },
+  })
+
+  await page.evaluate(({ state, user, users }) => {
+    window.harness.activate(state, user, users)
+  }, { state, user: ME, users: USERS })
+
+  // Alice's drawer should be open with a pass button
+  await expect(page.locator('.player-row[data-uid="uid-alice"] .player-drawer-wrapper.open')).toBeVisible()
+  await expect(page.locator('[data-action="pass-go"]')).toBeVisible()
+
+  // Alice selects her first two cards (AS at index 0, KH at index 1)
+  await page.locator('.player-row[data-uid="uid-alice"] [data-card-index="0"]').click()
+  await page.locator('.player-row[data-uid="uid-alice"] [data-card-index="1"]').click()
+  await expect(page.locator('.player-row[data-uid="uid-alice"] .card-thumb-selected')).toHaveCount(2)
+
+  // Alice commits her pass
+  await page.locator('[data-action="pass-go"]').click()
+
+  // Cards should leave Alice's hand immediately — 5 → 3
+  await expect(page.locator('.player-row[data-uid="uid-alice"] .card-thumb')).toHaveCount(3)
+  // Bob still has all 5 (he hasn't passed yet)
+  await expect(page.locator('.player-row[data-uid="uid-bob"] .card-thumb')).toHaveCount(5)
+  // Round still active (Bob hasn't committed)
+  const stateAfterAlice = await page.evaluate(() => window.harness.getState())
+  expect(stateAfterAlice.round).not.toBeNull()
+
+  // Simulate Bob passing his first two cards (2C, 3D) to Alice
+  await page.evaluate(() => window.harness.applyMutationAs('passingReply', {
+    uid:  'uid-bob',
+    pass: [{ rank: '2', suit: 'C', faceUp: false, deckId: 0 },
+           { rank: '3', suit: 'D', faceUp: false, deckId: 0 }],
+  }))
+
+  // Round resolved — both passed 2 and received 2, so both still have 5
+  await expect(page.locator('.player-row[data-uid="uid-alice"] .card-thumb')).toHaveCount(5)
+  await expect(page.locator('.player-row[data-uid="uid-bob"] .card-thumb')).toHaveCount(5)
+
+  // Alice should have Bob's cards (2C, 3D) — visible to Alice since isMe
+  const aliceSrcs = await page.locator('.player-row[data-uid="uid-alice"] .card-thumb').evaluateAll(
+    els => els.map(el => el.getAttribute('src'))
+  )
+  expect(aliceSrcs.some(s => s?.includes('2C'))).toBe(true)
+  expect(aliceSrcs.some(s => s?.includes('3D'))).toBe(true)
+  // Alice should NOT have AS or KH (she passed them away)
+  expect(aliceSrcs.some(s => s?.includes('AS'))).toBe(false)
+  expect(aliceSrcs.some(s => s?.includes('KH'))).toBe(false)
+
+  // Round should be null and pass button gone (drawer stays open for me, shows user actions)
+  const finalState = await page.evaluate(() => window.harness.getState())
+  expect(finalState.round).toBeNull()
+  await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
+})
