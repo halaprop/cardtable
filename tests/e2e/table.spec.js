@@ -138,6 +138,96 @@ test('pass round: cards leave sender immediately, arrive in correct hands after 
   await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
 })
 
+test('pass round story: 4 players, dealer initiates, pips clear as each player commits, correct cards in every hand', async ({ page }) => {
+  const users = makeUsers(ALICE, BOB, CAROL, DAVE)
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
+
+  // Deal 3 cards each (easier to track than 5)
+  await g.startGame({ pattern: 'ddd', hasPassing: true })
+
+  // Snapshot hands before passing
+  const before = await g.state()
+  const hands  = Object.fromEntries(before.players.map(p => [p.uid, p.cards]))
+
+  // ── Dealer initiates pass round ──────────────────────────────────────────
+  // stepCount=1 means each player passes 1 card to the player after them:
+  //   Alice → Bob → Carol → Dave → Alice
+  await g.clickPassRound(1, 1)
+
+  // All 4 players have pips — nobody has committed yet
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  // Alice sees her own pass UI (drawer is open for her)
+  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(page.locator('[data-action="pass-go"]')).toBeVisible()
+
+  // ── Alice passes ─────────────────────────────────────────────────────────
+  await g.pass(ALICE.$id, [0])
+
+  // Alice committed — her pip clears, drawer shows "Waiting..."
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
+
+  // Everyone else still has their pip — they haven't committed yet
+  for (const p of [BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  // Alice's card count drops immediately (card removed from her hand)
+  await expect(g.playerCards(ALICE.$id)).toHaveCount(2)
+  for (const p of [BOB, CAROL, DAVE]) {
+    await expect(g.playerCards(p.$id)).toHaveCount(3)
+  }
+
+  // ── Bob, Carol, Dave pass in sequence ────────────────────────────────────
+  await g.pass(BOB.$id, [0])
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+  for (const p of [CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  await g.pass(CAROL.$id, [0])
+  await expect(g.playerRow(CAROL.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(DAVE.$id).locator('.turn-pip')).toBeVisible()
+
+  await g.pass(DAVE.$id, [0])  // last commit — round resolves
+
+  // ── Round resolved ───────────────────────────────────────────────────────
+  // All pips gone, round null
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
+  }
+  expect((await g.state()).round).toBeNull()
+
+  // Everyone is back to 3 cards
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerCards(p.$id)).toHaveCount(3)
+  }
+
+  // ── Correct cards in every hand ──────────────────────────────────────────
+  // Alice receives Dave's card[0] (Dave → Alice)
+  const aliceSrcs  = await g.cardSrcs(ALICE.$id)
+  const daveCard0  = `${hands[DAVE.$id][0].rank}${hands[DAVE.$id][0].suit}.svg`
+  expect(aliceSrcs.some(s => s?.includes(daveCard0))).toBe(true)
+  // Alice no longer has her original card[0] (she passed it to Bob)
+  const aliceCard0 = `${hands[ALICE.$id][0].rank}${hands[ALICE.$id][0].suit}.svg`
+  expect(aliceSrcs.some(s => s?.includes(aliceCard0))).toBe(false)
+
+  // Bob, Carol, Dave's received cards are face-down from Alice's view —
+  // verify via state instead
+  const finalState = await g.state()
+  const find = uid => finalState.players.find(p => p.uid === uid).cards
+
+  // Bob received Alice's card[0]
+  expect(find(BOB.$id).some(c => c.rank === hands[ALICE.$id][0].rank && c.suit === hands[ALICE.$id][0].suit)).toBe(true)
+  // Carol received Bob's card[0]
+  expect(find(CAROL.$id).some(c => c.rank === hands[BOB.$id][0].rank && c.suit === hands[BOB.$id][0].suit)).toBe(true)
+  // Dave received Carol's card[0]
+  expect(find(DAVE.$id).some(c => c.rank === hands[CAROL.$id][0].rank && c.suit === hands[CAROL.$id][0].suit)).toBe(true)
+})
+
 // ── Full hand story ───────────────────────────────────────────────────────────
 
 test('full hand: 4 players, dealer starts game with ante, all ante, betting round with fold, correct pot', async ({ page }) => {
