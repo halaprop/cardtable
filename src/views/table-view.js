@@ -185,8 +185,8 @@ export class TableView {
       const hasRoundContent = !!inner.querySelector('[data-action="ante-pay"],[data-action="ante-fold"],[data-action="bet-go"],[data-action="bet-fold"],[data-action="pass-go"],[data-action="declare"]')
       if (isMyTurn && s.round) {
         inner.innerHTML = this._roundActionsHTML(player, s.round)
-        wrapper.classList.add('open')
         this._expandedUids.add(player.uid)
+        requestAnimationFrame(() => wrapper.classList.add('open'))
       } else if (hasRoundContent) {
         // Turn ended — clear stale round UI; never close an open drawer
         inner.innerHTML = isMe ? this._userActionsHTML(player) : ''
