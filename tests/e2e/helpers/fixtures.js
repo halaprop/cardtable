@@ -3,6 +3,7 @@
 export const ALICE = { $id: 'uid-alice', name: 'Alice' }
 export const BOB   = { $id: 'uid-bob',   name: 'Bob'   }
 export const CAROL = { $id: 'uid-carol', name: 'Carol' }
+export const DAVE  = { $id: 'uid-dave',  name: 'Dave'  }
 
 /** Build a users map (uid → user doc) for any set of players */
 export function makeUsers(...players) {

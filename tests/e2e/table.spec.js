@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ALICE, BOB, makeUsers, card } from './helpers/fixtures.js'
+import { ALICE, BOB, CAROL, DAVE, makeUsers, card } from './helpers/fixtures.js'
 import { Game } from './helpers/game.js'
 
 const USERS = makeUsers(ALICE, BOB)
@@ -136,4 +136,85 @@ test('pass round: cards leave sender immediately, arrive in correct hands after 
   const s = await g.state()
   expect(s.round).toBeNull()
   await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
+})
+
+// ── Full hand story ───────────────────────────────────────────────────────────
+
+test('full hand: 4 players, dealer starts game with ante, all ante, betting round with fold, correct pot', async ({ page }) => {
+  const users = makeUsers(ALICE, BOB, CAROL, DAVE)
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
+
+  // ── Deal ──────────────────────────────────────────────────────────────────
+  // Alice starts a 5-card draw game with a 5-chip ante
+  await g.startGame({ pattern: 'ddddd', ante: 5 })
+
+  // All 4 players receive 5 cards
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerCards(p.$id)).toHaveCount(5)
+  }
+
+  // ── Ante round ────────────────────────────────────────────────────────────
+  // All players have a turn pip simultaneously (antes are not sequential)
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  // Alice antes via her action drawer
+  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await g.ante(ALICE.$id, 5)
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+
+  // Bob, Carol, Dave ante in turn
+  await g.ante(BOB.$id, 5)
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+
+  await g.ante(CAROL.$id, 5)
+  await g.ante(DAVE.$id, 5)
+
+  // Ante round done — pot = 20, no pips, round cleared
+  let s = await g.state()
+  expect(s.pot).toBe(20)
+  expect(s.round).toBeNull()
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
+  }
+
+  // ── Betting round ─────────────────────────────────────────────────────────
+  // Alice opens the betting round via dealer controls, Bob goes first
+  await g.clickBetRound(BOB.$id)
+
+  // Bob is up: his pip shows, others don't
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(CAROL.$id).locator('.turn-pip')).not.toBeVisible()
+
+  // Bob bets 10
+  await g.bet(BOB.$id, 10)
+
+  // Carol is up
+  await expect(g.playerRow(CAROL.$id).locator('.turn-pip')).toBeVisible()
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+  await g.bet(CAROL.$id, 10)  // call
+
+  // Dave is up — Dave folds
+  await expect(g.playerRow(DAVE.$id).locator('.turn-pip')).toBeVisible()
+  await g.bet(DAVE.$id, 'fold')
+  expect((await g.state()).players.find(p => p.uid === DAVE.$id).folded).toBe(true)
+
+  // Alice is up: her pip shows and her action drawer opens
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).toBeVisible()
+  await expect(g.playerRow(DAVE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await g.bet(ALICE.$id, 10)  // call
+
+  // ── End of betting ────────────────────────────────────────────────────────
+  // Pot = 20 ante + 10 (Bob) + 10 (Carol) + 10 (Alice) = 50. Dave folded so no bet.
+  s = await g.state()
+  expect(s.pot).toBe(50)
+  expect(s.round).toBeNull()
+
+  // No turn pips remaining
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
+  }
 })
