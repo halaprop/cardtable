@@ -138,6 +138,73 @@ test('pass round: cards leave sender immediately, arrive in correct hands after 
   await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
 })
 
+test('hi/lo declaration story: 4 players, dealer initiates, pips clear as each declares, declaration cards appear in every hand', async ({ page }) => {
+  const users = makeUsers(ALICE, BOB, CAROL, DAVE)
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
+
+  await g.startGame({ pattern: 'ddd', hasHiLo: true })
+
+  // ── Dealer initiates Hi/Lo declaration via UI controls ───────────────────
+  await g.clickDeclareRound('hl')
+
+  const s0 = await g.state()
+  expect(s0.round?.type).toBe('declare')
+  expect(s0.round.requests.map(r => r.options)).toEqual(
+    [['high', 'low'], ['high', 'low'], ['high', 'low'], ['high', 'low']]
+  )
+
+  // All 4 players have pips — nobody has declared yet
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  // Alice's drawer is open and shows High / Low buttons
+  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(page.locator('[data-action="declare"][data-option="high"]')).toBeVisible()
+  await expect(page.locator('[data-action="declare"][data-option="low"]')).toBeVisible()
+
+  // ── Players declare one by one ───────────────────────────────────────────
+  await g.declare(ALICE.$id, 'high')
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(page.locator('[data-action="declare"]')).not.toBeVisible()
+  for (const p of [BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  await g.declare(BOB.$id, 'low')
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+  for (const p of [CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).toBeVisible()
+  }
+
+  await g.declare(CAROL.$id, 'high')
+  await expect(g.playerRow(CAROL.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(DAVE.$id).locator('.turn-pip')).toBeVisible()
+
+  await g.declare(DAVE.$id, 'low')  // last declaration — round resolves
+
+  // ── Round resolved ───────────────────────────────────────────────────────
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
+  }
+  expect((await g.state()).round).toBeNull()
+
+  // Each player has 4 cards: their original 3 + 1 declaration card
+  for (const p of [ALICE, BOB, CAROL, DAVE]) {
+    await expect(g.playerCards(p.$id)).toHaveCount(4)
+  }
+
+  // ── Correct declarations in every hand ───────────────────────────────────
+  const final = await g.state()
+  const decl  = uid => final.players.find(p => p.uid === uid).cards
+                         .find(c => c.suit === 'declaration')
+
+  expect(decl(ALICE.$id)?.rank).toBe('high')
+  expect(decl(BOB.$id)?.rank).toBe('low')
+  expect(decl(CAROL.$id)?.rank).toBe('high')
+  expect(decl(DAVE.$id)?.rank).toBe('low')
+})
+
 test('pass round story: 4 players, dealer initiates, pips clear as each player commits, correct cards in every hand', async ({ page }) => {
   const users = makeUsers(ALICE, BOB, CAROL, DAVE)
   const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB, CAROL, DAVE], users })
