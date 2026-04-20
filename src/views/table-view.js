@@ -474,17 +474,16 @@ export class TableView {
         return
       }
 
+      // Action buttons — checked before row toggle so deal buttons inside the
+      // logged-in player's row-main (which carries data-toggle-uid) fire correctly.
+      const btn = e.target.closest('[data-action]')
+      if (btn && !btn.dataset.disabled) { this._handleAction(btn); return }
+
       // Row toggle — insert/remove drawer without full re-render
       const toggleEl = e.target.closest('[data-toggle-uid]')
       if (toggleEl?.dataset.toggleUid) {
-        const uid = toggleEl.dataset.toggleUid
-        this._toggleDrawer(uid)
-        return
+        this._toggleDrawer(toggleEl.dataset.toggleUid)
       }
-
-      // Action buttons
-      const btn = e.target.closest('[data-action]')
-      if (btn && !btn.dataset.disabled) this._handleAction(btn)
     })
   }
 

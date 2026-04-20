@@ -171,6 +171,93 @@ export class Game {
     return this
   }
 
+  // ── Dealer deal buttons ───────────────────────────────────────────────────────
+
+  async dealToTable(faceUp) {
+    await this.#page.locator(`[data-action="${faceUp ? 'deal-up' : 'deal-down'}"][data-deal-uid="table"]`).click()
+    return this
+  }
+
+  async dealToPlayer(uid, faceUp) {
+    await this.#page.locator(`[data-action="${faceUp ? 'deal-up' : 'deal-down'}"][data-deal-uid="${uid}"]`).click()
+    return this
+  }
+
+  // ── Logged-in player card actions ─────────────────────────────────────────────
+
+  /** Open the logged-in user's action drawer (no-op if already open). */
+  async openMyDrawer() {
+    const uid = this.#user.$id
+    const drawer = this.#page.locator(`.player-row[data-uid="${uid}"] .player-drawer-wrapper`)
+    const isOpen = await drawer.evaluate(el => el.classList.contains('open'))
+    if (!isOpen) {
+      await this.#page.locator(`.player-row[data-uid="${uid}"] .player-name`).click()
+      await this.#page.locator(`.player-row[data-uid="${uid}"] .player-drawer-wrapper.open`).waitFor({ state: 'visible' })
+    }
+    return this
+  }
+
+  /** Click a card to toggle its selection (own player's cards only). */
+  async selectCard(cardIndex) {
+    await this.#page.locator(`[data-card-uid="${this.#user.$id}"][data-card-index="${cardIndex}"]`).click()
+    return this
+  }
+
+  /** Reveal all cards for a player. Own player: UI. Others: mutation. */
+  async revealAll(uid) {
+    if (uid === this.#user.$id) {
+      await this.openMyDrawer()
+      await this.#page.locator(`.player-row[data-uid="${uid}"] [data-action="reveal-all"]`).click()
+    } else {
+      await this.#mutate('revealAll', { uid })
+    }
+    return this
+  }
+
+  /** Select cards by index then reveal them. Own player: UI. Others: mutation. */
+  async revealSelected(uid, cardIndices) {
+    if (uid === this.#user.$id) {
+      for (const i of cardIndices) await this.selectCard(i)
+      await this.openMyDrawer()
+      await this.#page.locator(`.player-row[data-uid="${uid}"] [data-action="reveal"]`).click()
+    } else {
+      const state  = await this.state()
+      const player = state.players.find(p => p.uid === uid)
+      await this.#mutate('reveal', { uid, cards: cardIndices.map(i => player.cards[i]) })
+    }
+    return this
+  }
+
+  /** Select cards by index then discard them. Own player: UI. Others: mutation. */
+  async discardSelected(uid, cardIndices) {
+    if (uid === this.#user.$id) {
+      for (const i of cardIndices) await this.selectCard(i)
+      await this.openMyDrawer()
+      await this.#page.locator(`.player-row[data-uid="${uid}"] [data-action="discard"]`).click()
+    } else {
+      const state  = await this.state()
+      const player = state.players.find(p => p.uid === uid)
+      await this.#mutate('discard', { uid, cards: cardIndices.map(i => player.cards[i]) })
+    }
+    return this
+  }
+
+  // ── Perspective switching ─────────────────────────────────────────────────────
+
+  /** Switch which player is "logged in" to check visibility from their POV. */
+  async switchUser(user) {
+    await this.#page.evaluate(u => window.harness.switchUser(u), user)
+    this.#user = user
+    return this
+  }
+
+  // ── Additional locators ───────────────────────────────────────────────────────
+
+  /** Card thumbnails dealt to the shared table area. */
+  tableCards() {
+    return this.#page.locator('.table-info-card .card-thumb')
+  }
+
   // ── End game dialog ───────────────────────────────────────────────────────────
 
   /** Click End Game and wait for the dialog to open */

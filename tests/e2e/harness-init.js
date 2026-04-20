@@ -41,6 +41,12 @@ window.harness = {
     return TableMutations[name]('test-table', params)
   },
 
+  /** Change the logged-in user and re-render — lets tests check visibility from another player's POV. */
+  switchUser(user) {
+    view.user = user
+    view._render()
+  },
+
   getMutations:   _getMutations,
   clearMutations: _clearMutations,
   getState:       _getState,
