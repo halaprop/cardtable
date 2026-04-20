@@ -62,6 +62,28 @@ test('ante round: pot updates as players ante', async ({ page }) => {
   expect(s.round).toBeNull()
 })
 
+// ── Betting round ─────────────────────────────────────────────────────────────
+
+test('betting round: turn indicator visible to all, clears when player acts', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+  await g.startGame({ pattern: 'ddddd' })
+  await g.clickBetRound(ALICE.$id)
+
+  // Alice is up first — her pip is visible, Bob's is not
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).toBeVisible()
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+
+  // Alice bets — now Bob is up
+  await g.bet(ALICE.$id, 10)
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).toBeVisible()
+
+  // Bob calls — round over, no pips anywhere
+  await g.bet(BOB.$id, 10)
+  await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
+  await expect(g.playerRow(BOB.$id).locator('.turn-pip')).not.toBeVisible()
+})
+
 // ── Pass round ────────────────────────────────────────────────────────────────
 
 test('pass round: dealer initiates via UI controls', async ({ page }) => {
