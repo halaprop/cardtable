@@ -164,6 +164,15 @@
   pointer-events: none;
 }
 
+@keyframes cardArrive {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.card-arriving {
+  animation: cardArrive 400ms ease-out;
+}
+
 /* Face-down card that only you can see — warm dim tint */
 .card-thumb-private {
   filter: brightness(0.70) sepia(0.25);
@@ -171,6 +180,7 @@
 
 /* Face-up card visible to everyone — no special treatment needed */
 .card-thumb-public {
+  color: inherit;
 }
 
 /* Per-row deal buttons (dealer only) */

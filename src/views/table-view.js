@@ -151,6 +151,7 @@ export class TableView {
         const newSrc   = showFace ? this._cardFileName(card) : backSrc
         if (img.src !== newSrc && !img.src.endsWith(newSrc)) img.src = newSrc
 
+        img.dataset.cardIndex = i
         const selected = this._selectedCards[player.uid]?.has(i)
         img.classList.toggle('die-thumb',           card.suit === 'dice')
         img.classList.toggle('card-thumb-selected', !!selected)
@@ -164,6 +165,7 @@ export class TableView {
         player.cards.slice(imgs.length).forEach((card, i) => {
           cardContainer.insertAdjacentHTML('beforeend',
             this._cardHTML(player.uid, card, imgs.length + i, isMe))
+          cardContainer.lastElementChild.classList.add('card-arriving')
         })
       }
     }
@@ -502,20 +504,6 @@ export class TableView {
       case 'pass-go': {
         const selected = [...(this._selectedCards[uid] ?? [])]
         const pass     = selected.map(i => this.state.players.find(p => p.uid === uid).cards[i])
-        const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
-        selected.forEach(i => {
-          const cardEl = row?.querySelector(`[data-card-index="${i}"]`)
-          if (!cardEl) return
-          const slot = cardEl.parentElement
-          slot.style.width    = slot.offsetWidth + 'px'
-          slot.style.overflow = 'hidden'
-          cardEl.classList.add('card-discarding')
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            slot.style.transition = 'width 200ms ease-out, margin-right 200ms ease-out'
-            slot.style.width       = '0'
-            slot.style.marginRight = '0'
-          }))
-        })
         this._selectedCards[uid] = new Set()
         return this._mutate(() => TableMutations.passingReply(this.tableId, { uid, pass }))
       }
