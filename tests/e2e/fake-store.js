@@ -96,7 +96,8 @@ export async function getUser(uid) {
   return { $id: uid, name: `Player ${uid}`, chips: 100, purchased: 0 }
 }
 
-export async function buyChips(_uid, _amount) {
+export async function buyChips(uid, amount) {
+  _mutations.push({ name: 'buyChips', uid, amount })
   return null
 }
 

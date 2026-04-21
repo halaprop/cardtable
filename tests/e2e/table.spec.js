@@ -485,3 +485,70 @@ test('full hand: 4 players, dealer starts game with ante, all ante, betting roun
     await expect(g.playerRow(p.$id).locator('.turn-pip')).not.toBeVisible()
   }
 })
+
+// ── End game ──────────────────────────────────────────────────────────────────
+
+test('end game: whole pot goes to winner, dealer button advances to next player', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+  await g.startGame({ hasHiLo: false, hasHiLoBoth: false, ante: 5 })
+  await g.ante(ALICE.$id, 5)
+  await g.ante(BOB.$id, 5)
+
+  await g.clickEndGame()
+  expect(await g.endGamePotLabel()).toBe('Pot: 10 chips')
+
+  await g.endGameSelect('w', ALICE.$id)
+  expect(await g.endGamePreview()).toBe('Alice wins 10 chips')
+
+  await g.endGamePayOut()
+
+  const s = await g.state()
+  expect(s.gameOn).toBe(false)
+  expect(s.pot).toBe(0)
+  expect(s.button).toBe(BOB.$id)  // auto-advances from Alice to Bob
+})
+
+// ── Ante fold ─────────────────────────────────────────────────────────────────
+
+test('ante round: folding marks player as folded, round continues for others', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+  await g.startGame({ ante: 5 })
+
+  await g.ante(ALICE.$id, 'fold')
+
+  const s = await g.state()
+  expect(s.players.find(p => p.uid === ALICE.$id).folded).toBe(true)
+  expect(s.round).not.toBeNull()  // Bob still hasn't anted
+})
+
+// ── Pass waiting state ────────────────────────────────────────────────────────
+
+test('pass round: drawer shows waiting state after player commits', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+  await g.startGame({ pattern: 'ddddd' })
+  await g.clickPassRound(1, 1)
+
+  await g.pass(ALICE.$id, [0])
+
+  await expect(page.locator('[data-action="pass-go"]')).not.toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-text')).toContainText('Waiting')
+})
+
+// ── Buy chips ─────────────────────────────────────────────────────────────────
+
+test('buy chips: button visible in idle drawer, modal accepts amount and fires buyChips', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+
+  // Game is not on — Buy Chips button should be available in the idle drawer
+  await g.playerRow(ALICE.$id).locator('.player-name').click()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('[data-action="buy-chips"]')).toBeVisible()
+
+  await g.clickBuyChips(ALICE.$id)
+  await g.submitBuyChips(50)
+
+  const mut = await g.lastMutation()
+  expect(mut.name).toBe('buyChips')
+  expect(mut.uid).toBe(ALICE.$id)
+  expect(mut.amount).toBe(50)
+})

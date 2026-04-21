@@ -242,6 +242,21 @@ export class Game {
     return this
   }
 
+  /** Click the Buy Chips button in a player's drawer. */
+  async clickBuyChips(uid) {
+    await this.openMyDrawer()
+    await this.#page.locator(`.player-row[data-uid="${uid}"] [data-action="buy-chips"]`).click()
+    await this.#page.locator('#modal-buy-chips').waitFor({ state: 'visible' })
+    return this
+  }
+
+  /** Fill the buy chips amount and click Buy. */
+  async submitBuyChips(amount) {
+    await this.#page.locator('#bc-amount').fill(String(amount))
+    await this.#page.locator('#bc-submit').click()
+    return this
+  }
+
   // ── Perspective switching ─────────────────────────────────────────────────────
 
   /** Switch which player is "logged in" to check visibility from their POV. */

@@ -182,14 +182,23 @@ export class TableView {
     const inner   = row.querySelector('.drawer-body')
     const wrapper = row.querySelector('.drawer-slide')
     if (inner && wrapper) {
+      const req             = s.round?.requests?.find(r => r.uid === player.uid)
+      const isCommittedPass = s.round?.type === 'pass' && req?.committedPass && isMe
       const hasRoundContent = !!inner.querySelector('[data-action="ante-pay"],[data-action="bet-go"],[data-action="pass-go"],[data-action="declare"]')
+      const hasWaiting      = inner.dataset.drawerMode === 'pass-waiting'
+
       if (isMyTurn && s.round) {
         inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.dataset.drawerMode = 'round'
         this._expandedUids.add(player.uid)
         requestAnimationFrame(() => wrapper.classList.add('open'))
-      } else if (hasRoundContent) {
-        // Turn ended — clear stale round UI; never close an open drawer
+      } else if (isCommittedPass && !hasWaiting) {
+        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.dataset.drawerMode = 'pass-waiting'
+      } else if (hasRoundContent || (hasWaiting && !s.round)) {
+        // Turn ended or pass round completed — restore default UI
         inner.innerHTML = isMe ? this._userActionsHTML(player) : ''
+        inner.dataset.drawerMode = isMe ? 'user' : ''
       }
     }
   }
@@ -246,9 +255,14 @@ export class TableView {
       player.folded ? 'player-row-folded' : '',
     ].filter(Boolean).join(' ')
 
-    const drawerContent = isExpanded
-      ? (isMyTurn && s.round ? this._roundActionsHTML(player, s.round) : isMe ? this._userActionsHTML(player) : '')
-      : ''
+    const req = s.round?.requests?.find(r => r.uid === player.uid)
+    const isCommittedPass = s.round?.type === 'pass' && req?.committedPass && isMe
+    let drawerContent = '', drawerMode = ''
+    if (isExpanded) {
+      if (isMyTurn && s.round)    { drawerContent = this._roundActionsHTML(player, s.round); drawerMode = 'round' }
+      else if (isCommittedPass)   { drawerContent = this._roundActionsHTML(player, s.round); drawerMode = 'pass-waiting' }
+      else if (isMe)              { drawerContent = this._userActionsHTML(player);            drawerMode = 'user' }
+    }
 
     return `
       <div class="${rowClass}" data-uid="${player.uid}">
@@ -269,7 +283,7 @@ export class TableView {
           </div>
         </div>
         <div class="drawer-slide ${isExpanded ? 'open' : ''}">
-          <div class="drawer-body">${drawerContent}</div>
+          <div class="drawer-body" data-drawer-mode="${drawerMode}">${drawerContent}</div>
         </div>
       </div>
     `
@@ -303,8 +317,7 @@ export class TableView {
       const s = this.state
       const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
       return `
-        <div class="drawer-prompt">${req.message || `Ante: ${req.chips} chips`}</div>
-        <div class="drawer-hint"></div>
+        <div class="drawer-text">${req.message || `Ante: ${req.chips} chips`}</div>
         <div class="drawer-actions">
           <button class="uk-button uk-button-default uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
@@ -316,8 +329,7 @@ export class TableView {
     if (round.type === 'bet') {
       const chips = req.chips
       return `
-        <div class="drawer-prompt">${req.message || 'Your bet'}</div>
-        <div class="drawer-hint"></div>
+        <div class="drawer-text">${req.message || 'Your bet'}</div>
         <div class="drawer-actions">
           <input id="bet-input" class="uk-input uk-form-small uk-width-small" type="number" min="${chips}" value="${chips}" placeholder="chips">
           <button class="uk-button uk-button-default uk-button-small" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
@@ -330,15 +342,13 @@ export class TableView {
 
     if (round.type === 'pass') {
       if (req.committedPass) return `
-        <div class="drawer-prompt"></div>
-        <div class="drawer-hint">Waiting for other players to pass…</div>
+        <div class="drawer-text">Waiting for other players to pass…</div>
         <div class="drawer-actions"></div>
       `
       const needed = req.cardCount
       const sel    = this._selectedCards[player.uid]?.size ?? 0
       return `
-        <div class="drawer-prompt"></div>
-        <div class="drawer-hint">${req.message} (${sel}/${needed} selected)</div>
+        <div class="drawer-text">${req.message} (${sel}/${needed} selected)</div>
         <div class="drawer-actions">
           <button class="uk-button uk-button-default uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
             uk-tooltip="Pass your selected cards to the player after you"
@@ -350,8 +360,7 @@ export class TableView {
     if (round.type === 'declare') {
       const opts = req.options ?? ['high', 'low']
       return `
-        <div class="drawer-prompt"></div>
-        <div class="drawer-hint">${req.message}</div>
+        <div class="drawer-text">${req.message}</div>
         <div class="drawer-actions">
           ${opts.map(o => `
             <button class="uk-button uk-button-default uk-button-small" data-action="declare" data-uid="${player.uid}" data-option="${o}">
@@ -370,8 +379,6 @@ export class TableView {
     const s = this.state
     const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
     return `
-      <div class="drawer-prompt"></div>
-      <div class="drawer-hint"></div>
       <div class="drawer-actions" style="justify-content: space-between">
         <div style="display:flex; gap:6px">
           <button class="uk-button uk-button-default uk-button-small" data-action="reveal-all" data-uid="${player.uid}">Reveal All</button>
@@ -510,6 +517,20 @@ export class TableView {
       case 'pass-go': {
         const selected = [...(this._selectedCards[uid] ?? [])]
         const pass     = selected.map(i => this.state.players.find(p => p.uid === uid).cards[i])
+        const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
+        selected.forEach(i => {
+          const cardEl = row?.querySelector(`[data-card-index="${i}"]`)
+          if (!cardEl) return
+          const slot = cardEl.parentElement
+          slot.style.width    = slot.offsetWidth + 'px'
+          slot.style.overflow = 'hidden'
+          cardEl.classList.add('card-discarding')
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            slot.style.transition = 'width 200ms ease-out, margin-right 200ms ease-out'
+            slot.style.width       = '0'
+            slot.style.marginRight = '0'
+          }))
+        })
         this._selectedCards[uid] = new Set()
         return this._mutate(() => TableMutations.passingReply(this.tableId, { uid, pass }))
       }
@@ -834,9 +855,18 @@ export class TableView {
     } else {
       const player  = this.state.players.find(p => p.uid === uid)
       const s = this.state
-      inner.innerHTML = this._isMyTurn(player, s) && s.round
-        ? this._roundActionsHTML(player, s.round)
-        : this._userActionsHTML(player)
+      const req = s.round?.requests?.find(r => r.uid === uid)
+      const isCommittedPass = s.round?.type === 'pass' && req?.committedPass
+      if (this._isMyTurn(player, s) && s.round) {
+        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.dataset.drawerMode = 'round'
+      } else if (isCommittedPass) {
+        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.dataset.drawerMode = 'pass-waiting'
+      } else {
+        inner.innerHTML = this._userActionsHTML(player)
+        inner.dataset.drawerMode = 'user'
+      }
       // One frame delay so browser registers the content before animating
       requestAnimationFrame(() => {
         wrapper.classList.add('open')
@@ -862,7 +892,7 @@ export class TableView {
     if (passBtn) {
       const needed = +passBtn.dataset.count
       passBtn.disabled = count !== needed
-      const hint = drawer.querySelector('.drawer-hint')
+      const hint = drawer.querySelector('.drawer-text')
       const req  = this.state.round?.requests?.find(r => r.uid === uid)
       if (hint && req) hint.textContent = `${req.message} (${count}/${needed} selected)`
     }

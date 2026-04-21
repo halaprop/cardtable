@@ -84,14 +84,14 @@
 
 .player-row-main  { width: 100%; }
 .player-row-left  { flex: 1; min-width: 0; }
-.player-row-center { flex: 2; justify-content: center; }
+.player-row-center { flex: 2; justify-content: center; min-height: 60px; }
 .player-row-right { flex: 1; justify-content: flex-end; }
 
 .player-name { font-size: 1.1em; }
 
 .turn-pip       { color: #1e87f0; font-size: 1.2em; line-height: 1; } /* UIKit primary */
 .turn-pip-empty { display: inline-block; width: 1em; }
-.drawer-hint    { color: #1e87f0; } /* UIKit primary — hint/instruction text */
+.drawer-text    { color: #1e87f0; } /* UIKit primary — action guidance text */
 
 .dealer-btn {
   background: #f0a500 !important;
@@ -117,24 +117,22 @@
   grid-template-rows: 1fr;
 }
 
-/* Fixed-height inner grid — 3 named rows so drawer height never varies by content */
 .drawer-body {
   overflow: hidden;
   padding-top: 0;
   transition: padding-top 250ms ease-out;
   display: grid;
-  grid-template-rows: 1.5em 1.3em 2rem;
-  grid-template-areas: "prompt" "hint" "actions";
+  grid-template-rows: auto 2rem;
+  grid-template-areas: "text" "actions";
   align-items: center;
-  row-gap: 2px;
+  row-gap: 6px;
 }
 
 .drawer-slide.open .drawer-body {
   padding-top: 8px;
 }
 
-.drawer-prompt  { grid-area: prompt; font-weight: bold; }
-.drawer-hint    { grid-area: hint; }   /* color set above near .turn-pip */
+.drawer-text    { grid-area: text; }   /* color set above near .turn-pip */
 .drawer-actions { grid-area: actions; display: flex; align-items: center; gap: 6px; }
 
 /* Card slot — wrapper that collapses on discard */

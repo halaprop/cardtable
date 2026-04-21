@@ -67,5 +67,7 @@ class App {
   }
 }
 
+UIkit.mixin({ data: { delay: 1000 } }, 'tooltip')
+
 const app = new App()
 app.start()
