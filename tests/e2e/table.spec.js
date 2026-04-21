@@ -38,6 +38,21 @@ test('ante round: turn pip shows, drawer opens for active player', async ({ page
   await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
 })
 
+test('ante round: closing and reopening drawer still shows round actions', async ({ page }) => {
+  const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
+  await g.startGame({ ante: 5 })
+
+  // Close the auto-opened drawer, then reopen it
+  await g.playerRow(ALICE.$id).locator('.player-name').click()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).not.toBeVisible()
+  await g.playerRow(ALICE.$id).locator('.player-name').click()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
+
+  // Round actions should be present, not the default user actions
+  await expect(g.playerRow(ALICE.$id).locator('[data-action="ante-pay"]')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('[data-action="reveal-all"]')).not.toBeVisible()
+})
+
 test('ante round: clicking Ante fires anteReply with correct uid and chips', async ({ page }) => {
   const g = await Game.setup(page, { dealer: ALICE, players: [ALICE, BOB], users: USERS })
   await g.startGame({ ante: 5 })

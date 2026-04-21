@@ -833,7 +833,10 @@ export class TableView {
       this._expandedUids.delete(uid)
     } else {
       const player  = this.state.players.find(p => p.uid === uid)
-      inner.innerHTML = this._userActionsHTML(player)
+      const s = this.state
+      inner.innerHTML = this._isMyTurn(player, s) && s.round
+        ? this._roundActionsHTML(player, s.round)
+        : this._userActionsHTML(player)
       // One frame delay so browser registers the content before animating
       requestAnimationFrame(() => {
         wrapper.classList.add('open')
