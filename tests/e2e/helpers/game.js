@@ -188,11 +188,11 @@ export class Game {
   /** Open the logged-in user's action drawer (no-op if already open). */
   async openMyDrawer() {
     const uid = this.#user.$id
-    const drawer = this.#page.locator(`.player-row[data-uid="${uid}"] .player-drawer-wrapper`)
+    const drawer = this.#page.locator(`.player-row[data-uid="${uid}"] .drawer-slide`)
     const isOpen = await drawer.evaluate(el => el.classList.contains('open'))
     if (!isOpen) {
       await this.#page.locator(`.player-row[data-uid="${uid}"] .player-name`).click()
-      await this.#page.locator(`.player-row[data-uid="${uid}"] .player-drawer-wrapper.open`).waitFor({ state: 'visible' })
+      await this.#page.locator(`.player-row[data-uid="${uid}"] .drawer-slide.open`).waitFor({ state: 'visible' })
     }
     return this
   }

@@ -35,7 +35,7 @@ test('ante round: turn pip shows, drawer opens for active player', async ({ page
   await g.startGame({ ante: 5 })
 
   await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).toBeVisible()
-  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
 })
 
 test('ante round: clicking Ante fires anteReply with correct uid and chips', async ({ page }) => {
@@ -167,7 +167,7 @@ test('hi/lo declaration story: pips clear as each declares, summary in lastActio
   }
 
   // Alice's drawer is open and shows High / Low buttons
-  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
   await expect(page.locator('[data-action="declare"][data-option="high"]')).toBeVisible()
   await expect(page.locator('[data-action="declare"][data-option="low"]')).toBeVisible()
 
@@ -322,7 +322,7 @@ test('pass round story: 4 players, dealer initiates, pips clear as each player c
   }
 
   // Alice sees her own pass UI (drawer is open for her)
-  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
   await expect(page.locator('[data-action="pass-go"]')).toBeVisible()
 
   // ── Alice passes ─────────────────────────────────────────────────────────
@@ -412,7 +412,7 @@ test('full hand: 4 players, dealer starts game with ante, all ante, betting roun
   }
 
   // Alice antes via her action drawer
-  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
   await g.ante(ALICE.$id, 5)
   await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).not.toBeVisible()
 
@@ -456,7 +456,7 @@ test('full hand: 4 players, dealer starts game with ante, all ante, betting roun
   // Alice is up: her pip shows and her action drawer opens
   await expect(g.playerRow(ALICE.$id).locator('.turn-pip')).toBeVisible()
   await expect(g.playerRow(DAVE.$id).locator('.turn-pip')).not.toBeVisible()
-  await expect(g.playerRow(ALICE.$id).locator('.player-drawer-wrapper.open')).toBeVisible()
+  await expect(g.playerRow(ALICE.$id).locator('.drawer-slide.open')).toBeVisible()
   await g.bet(ALICE.$id, 10)  // call
 
   // ── End of betting ────────────────────────────────────────────────────────

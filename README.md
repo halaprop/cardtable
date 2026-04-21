@@ -23,6 +23,18 @@ npm test          # Vitest in watch mode
 npx vitest run    # Single pass
 ```
 
+### End-to-end tests (Playwright)
+
+The Playwright suite in `tests/e2e/` exercises the full UI against an in-memory mock of Appwrite. The test runner starts a static server automatically — no manual setup needed.
+
+```bash
+npx playwright test              # Run all E2E tests
+npx playwright test --ui         # Interactive UI mode
+npx playwright test table.spec.js  # One file
+```
+
+Test results (screenshots, traces) land in `test-results/` which is gitignored.
+
 ## How it works
 
 One player is the dealer and controls game flow. Everyone else joins the table and responds to rounds as they come. The dealer can:

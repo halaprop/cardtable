@@ -91,7 +91,7 @@
 
 .turn-pip       { color: #1e87f0; font-size: 1.2em; line-height: 1; } /* UIKit primary */
 .turn-pip-empty { display: inline-block; width: 1em; }
-.turn-prompt    { color: #1e87f0; } /* UIKit primary */
+.drawer-hint    { color: #1e87f0; } /* UIKit primary — hint/instruction text */
 
 .dealer-btn {
   background: #f0a500 !important;
@@ -107,25 +107,35 @@
 }
 
 /* Drawer animation — grid trick gives true height reveal */
-.player-drawer-wrapper {
+.drawer-slide {
   display: grid;
   grid-template-rows: 0fr;
   transition: grid-template-rows 250ms ease-out;
 }
 
-.player-drawer-wrapper.open {
+.drawer-slide.open {
   grid-template-rows: 1fr;
 }
 
-.player-drawer-inner {
+/* Fixed-height inner grid — 3 named rows so drawer height never varies by content */
+.drawer-body {
   overflow: hidden;
   padding-top: 0;
   transition: padding-top 250ms ease-out;
+  display: grid;
+  grid-template-rows: 1.5em 1.3em 2rem;
+  grid-template-areas: "prompt" "hint" "actions";
+  align-items: center;
+  row-gap: 2px;
 }
 
-.player-drawer-wrapper.open .player-drawer-inner {
+.drawer-slide.open .drawer-body {
   padding-top: 8px;
 }
+
+.drawer-prompt  { grid-area: prompt; font-weight: bold; }
+.drawer-hint    { grid-area: hint; }   /* color set above near .turn-pip */
+.drawer-actions { grid-area: actions; display: flex; align-items: center; gap: 6px; }
 
 /* Card slot — wrapper that collapses on discard */
 .card-slot {

@@ -179,10 +179,10 @@ export class TableView {
       pip.textContent = hasTurn ? '●' : ''
     }
 
-    const inner   = row.querySelector('.player-drawer-inner')
-    const wrapper = row.querySelector('.player-drawer-wrapper')
+    const inner   = row.querySelector('.drawer-body')
+    const wrapper = row.querySelector('.drawer-slide')
     if (inner && wrapper) {
-      const hasRoundContent = !!inner.querySelector('[data-action="ante-pay"],[data-action="ante-fold"],[data-action="bet-go"],[data-action="bet-fold"],[data-action="pass-go"],[data-action="declare"]')
+      const hasRoundContent = !!inner.querySelector('[data-action="ante-pay"],[data-action="bet-go"],[data-action="pass-go"],[data-action="declare"]')
       if (isMyTurn && s.round) {
         inner.innerHTML = this._roundActionsHTML(player, s.round)
         this._expandedUids.add(player.uid)
@@ -268,8 +268,8 @@ export class TableView {
             <span class="uk-badge chip-badge">${chips}</span>
           </div>
         </div>
-        <div class="player-drawer-wrapper ${isExpanded ? 'open' : ''}">
-          <div class="player-drawer-inner">${drawerContent}</div>
+        <div class="drawer-slide ${isExpanded ? 'open' : ''}">
+          <div class="drawer-body">${drawerContent}</div>
         </div>
       </div>
     `
@@ -303,8 +303,9 @@ export class TableView {
       const s = this.state
       const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
       return `
-        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message || `Ante: ${req.chips} chips`}</div>
-        <div class="uk-flex uk-flex-middle" style="gap:6px">
+        <div class="drawer-prompt">${req.message || `Ante: ${req.chips} chips`}</div>
+        <div class="drawer-hint"></div>
+        <div class="drawer-actions">
           <button class="uk-button uk-button-default uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
           ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
@@ -315,41 +316,49 @@ export class TableView {
     if (round.type === 'bet') {
       const chips = req.chips
       return `
-        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message || 'Your bet'}</div>
-        <div class="uk-flex uk-flex-middle">
+        <div class="drawer-prompt">${req.message || 'Your bet'}</div>
+        <div class="drawer-hint"></div>
+        <div class="drawer-actions">
           <input id="bet-input" class="uk-input uk-form-small uk-width-small" type="number" min="${chips}" value="${chips}" placeholder="chips">
-          <button class="uk-button uk-button-default uk-button-small uk-margin-small-left" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
+          <button class="uk-button uk-button-default uk-button-small" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
             ${chips === 0 ? 'Check / Bet' : 'Call / Raise'}
           </button>
-          <button class="uk-button uk-button-default uk-button-small uk-margin-small-left" data-action="bet-fold" data-uid="${player.uid}">Fold</button>
+          <button class="uk-button uk-button-default uk-button-small" data-action="bet-fold" data-uid="${player.uid}">Fold</button>
         </div>
       `
     }
 
     if (round.type === 'pass') {
       if (req.committedPass) return `
-        <div class="uk-text-muted">Waiting for other players to pass...</div>
+        <div class="drawer-prompt"></div>
+        <div class="drawer-hint">Waiting for other players to pass…</div>
+        <div class="drawer-actions"></div>
       `
       const needed = req.cardCount
       const sel    = this._selectedCards[player.uid]?.size ?? 0
       return `
-        <div class="turn-prompt uk-text-bold uk-margin-small-bottom">${req.message}</div>
-        <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Click your cards above to select them (${sel}/${needed} selected)</div>
-        <button class="uk-button uk-button-default uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
-          uk-tooltip="Pass your selected cards to the player after you"
-          ${sel !== needed ? 'disabled' : ''}>Pass</button>
+        <div class="drawer-prompt"></div>
+        <div class="drawer-hint">${req.message} (${sel}/${needed} selected)</div>
+        <div class="drawer-actions">
+          <button class="uk-button uk-button-default uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
+            uk-tooltip="Pass your selected cards to the player after you"
+            ${sel !== needed ? 'disabled' : ''}>Pass</button>
+        </div>
       `
     }
 
     if (round.type === 'declare') {
       const opts = req.options ?? ['high', 'low']
       return `
-        <div class="uk-text-warning uk-text-bold uk-margin-small-bottom">${req.message}</div>
-        ${opts.map(o => `
-          <button class="uk-button uk-button-default uk-button-small uk-margin-small-right" data-action="declare" data-uid="${player.uid}" data-option="${o}">
-            ${o.charAt(0).toUpperCase() + o.slice(1)}
-          </button>
-        `).join('')}
+        <div class="drawer-prompt"></div>
+        <div class="drawer-hint">${req.message}</div>
+        <div class="drawer-actions">
+          ${opts.map(o => `
+            <button class="uk-button uk-button-default uk-button-small" data-action="declare" data-uid="${player.uid}" data-option="${o}">
+              ${o.charAt(0).toUpperCase() + o.slice(1)}
+            </button>
+          `).join('')}
+        </div>
       `
     }
 
@@ -361,13 +370,15 @@ export class TableView {
     const s = this.state
     const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
     return `
-      <div class="uk-flex uk-flex-between uk-flex-middle" style="gap:6px">
-        <div class="uk-flex" style="gap:6px">
+      <div class="drawer-prompt"></div>
+      <div class="drawer-hint"></div>
+      <div class="drawer-actions" style="justify-content: space-between">
+        <div style="display:flex; gap:6px">
           <button class="uk-button uk-button-default uk-button-small" data-action="reveal-all" data-uid="${player.uid}">Reveal All</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="reveal" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Reveal Selected</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
         </div>
-        <div class="uk-flex uk-flex-middle" style="gap:6px">
+        <div style="display:flex; gap:6px; align-items:center">
           ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
           <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table">Stand Up</button>
         </div>
@@ -812,8 +823,8 @@ export class TableView {
   _toggleDrawer(uid) {
     const row = this.root.querySelector(`.player-row[data-uid="${uid}"]`)
     if (!row) return
-    const wrapper = row.querySelector('.player-drawer-wrapper')
-    const inner   = row.querySelector('.player-drawer-inner')
+    const wrapper = row.querySelector('.drawer-slide')
+    const inner   = row.querySelector('.drawer-body')
     if (!wrapper || !inner) return
 
     const isOpen = wrapper.classList.contains('open')
@@ -840,13 +851,18 @@ export class TableView {
 
   _refreshDrawerButtons(uid) {
     const count = this._selectedCards[uid]?.size ?? 0
-    const drawer = this.root.querySelector(`.player-row[data-uid="${uid}"] .player-drawer-inner`)
+    const drawer = this.root.querySelector(`.player-row[data-uid="${uid}"] .drawer-body`)
     if (!drawer) return
     drawer.querySelectorAll('[data-action="reveal"]').forEach(b => b.disabled = count === 0)
     drawer.querySelectorAll('[data-action="discard"]').forEach(b => b.disabled = count === 0)
-    // pass button: needs exact card count
     const passBtn = drawer.querySelector('[data-action="pass-go"]')
-    if (passBtn) passBtn.disabled = count !== +passBtn.dataset.count
+    if (passBtn) {
+      const needed = +passBtn.dataset.count
+      passBtn.disabled = count !== needed
+      const hint = drawer.querySelector('.drawer-hint')
+      const req  = this.state.round?.requests?.find(r => r.uid === uid)
+      if (hint && req) hint.textContent = `${req.message} (${count}/${needed} selected)`
+    }
   }
 
   _toggleCardSelection(uid, index) {
