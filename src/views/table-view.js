@@ -1,5 +1,5 @@
 import { TableMutations, subscribeTable, subscribeUsers, getUser, listUsers, buyChips } from '../store.js'
-import { calcDiceSplits, calcCardSplits } from '../model/splits.js'
+import { calcDiceSplits, calcCardSplits, buildWinnerChipMap } from '../model/endgame.js'
 import { Debug } from '../debug.js'
 
 export class TableView {
@@ -424,7 +424,7 @@ export class TableView {
         <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Dealer Controls</div>
         <div class="uk-flex uk-flex-between" style="gap:6px">
           <div class="uk-flex uk-flex-wrap" style="gap:6px">
-            ${b('New Game',    'new-game',    'uk-button-primary',   false,          'Start a new hand — choose game type and other settings')}
+            ${b('New Game',    'new-game',    'uk-button-primary',   s.gameOn,       'Start a new hand — choose game type and other settings')}
             ${s.diceGame ? `
               ${b('Reroll',         'reroll',        'uk-button-default', !hasPlayers || noGame, 'Reroll all dice')}
               ${b('Reveal & Count', 'reveal-count',  'uk-button-default', !hasPlayers || noGame, 'Flip all dice face-up and show totals')}
@@ -604,7 +604,7 @@ export class TableView {
 
       // Dealer actions
       case 'new-game':       return this._showNewGameDialog()
-      case 'end-game':       return this._showEndGameDialog()
+      case 'end-game':       return this.state.phase === 'ante' ? this._showCancelGameDialog() : this._showEndGameDialog()
       case 'deal-down':
       case 'deal-up':
         return this._mutate(() => TableMutations.dealOne(this.tableId, { uid: btn.dataset.dealUid, faceUp: action === 'deal-up' }))
@@ -729,6 +729,27 @@ export class TableView {
     modal.show()
   }
 
+  _showCancelGameDialog() {
+    const gs      = this.state
+    const modal   = UIkit.modal('#modal-cancel-game')
+    const confirm = document.getElementById('cg-confirm')
+    const message = document.getElementById('cg-message')
+
+    const refundable = gs.players.filter(p => p.antePaid > 0)
+    if (refundable.length) {
+      const names = refundable.map(p => `${p.name} (${p.antePaid})`).join(', ')
+      message.textContent = `Antes will be returned: ${names}. Cards will be collected.`
+    } else {
+      message.textContent = 'Cards will be collected. No antes to return.'
+    }
+
+    confirm.addEventListener('click', () => {
+      modal.hide()
+      this._mutate(() => TableMutations.cancelGame(this.tableId, 'Game cancelled — antes returned.'))
+    }, { once: true })
+    modal.show()
+  }
+
   _showEndGameDialog() {
     const gs      = this.state
     const pot     = gs.pot
@@ -820,21 +841,7 @@ export class TableView {
     render()
 
     const handler = () => {
-      const winnerChipMap = {}
-      const credit = (key) => {
-        const uid = sel[key]
-        if (!uid || uid === 'split') return
-        const name = players.find(p => p.uid === uid)?.name ?? ''
-        if (!winnerChipMap[uid]) winnerChipMap[uid] = { uid, name, winnings: 0 }
-        winnerChipMap[uid].winnings += sp[key]
-      }
-      if (gs.diceGame) {
-        ;['1st','2nd','3rd'].slice(0, places).forEach(credit)
-      } else if (sel.w && sel.w !== 'split') {
-        credit('w')
-      } else {
-        ;['h','l','hh','hl','lh','ll'].forEach(credit)
-      }
+      const winnerChipMap = buildWinnerChipMap(sel, sp, places, players, gs.diceGame)
       if (!Object.keys(winnerChipMap).length) return
       modal.hide()
       submit.removeEventListener('click', handler)

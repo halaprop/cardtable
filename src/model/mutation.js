@@ -39,7 +39,7 @@ export function moveDealerButton(state, { uid }) {
 
 export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth, allowBuyIn, button, requests, lastAction: customAction }) {
   const deck    = new Deck().shuffle()
-  const players = state.players.map(p => ({ ...p, folded: false, betCredit: 0, cards: [] }))
+  const players = state.players.map(p => ({ ...p, folded: false, betCredit: 0, antePaid: 0, cards: [] }))
 
   // ante/blind round
   const bigBlind  = requests?.find(r => r.bigBlind)?.chips ?? 0
@@ -70,7 +70,7 @@ export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasH
     hasPassing: !!hasPassing, hasHiLo: !!hasHiLo, hasHiLoBoth: !!hasHiLoBoth, allowBuyIn: !!allowBuyIn,
     button: button ?? state.button,
     cards: [], deck: deck.toJSON(),
-    players, pot: 0,
+    players, pot: 0, phase: 'ante',
     bigBlind, round, lastAction,
   }
 }
@@ -78,18 +78,25 @@ export function startGame(state, { gameName, pattern, diceGame, hasPassing, hasH
 export function endGame(state, { players: winnerMap, lastAction }) {
   // winnerMap: { [key]: { uid, name, winnings } }  (keys like 'w','h','l',etc.)
   // Chip payouts handled by the store layer (needs user docs).
-  // Here we just advance the button and reset table state.
-  const players   = state.players
-  const btnIndex  = players.findIndex(p => p.uid === state.button)
-  const button    = players[(btnIndex + 1) % players.length].uid
-  return { gameOn: false, pot: 0, round: null, lastAction, button }
+  // Here we advance the button and reset table state including cards.
+  const players  = state.players.map(p => ({ ...p, cards: [], antePaid: 0 }))
+  const btnIndex = state.players.findIndex(p => p.uid === state.button)
+  const button   = players[(btnIndex + 1) % players.length].uid
+  return { gameOn: false, pot: 0, round: null, phase: null, cards: [], players, lastAction, button }
+}
+
+export function cancelGame(state, { lastAction }) {
+  // Early cancel — antes refunded by store layer via players[].antePaid.
+  // Button does not advance (game never really started).
+  const players = state.players.map(p => ({ ...p, cards: [], folded: false, betCredit: 0, antePaid: 0 }))
+  return { gameOn: false, pot: 0, round: null, phase: null, cards: [], players, lastAction }
 }
 
 export function massDeal(state, { pattern }) {
   const deck    = new Deck(state.deck)
   const players = state.players.map(p => ({ ...p, cards: [...p.cards] }))
   deck.dealPattern(pattern ?? '', players.filter(p => !p.folded))
-  return { players, deck: deck.toJSON() }
+  return { players, deck: deck.toJSON(), phase: 'play' }
 }
 
 export function dealOne(state, { uid, faceUp }) {
@@ -98,7 +105,7 @@ export function dealOne(state, { uid, faceUp }) {
 
   if (uid === 'table') {
     const cards = [...state.cards, card.toJSON()]
-    return { cards, deck: deck.toJSON(), lastAction: `Dealer dealt ${card.friendlyName()} to the table.` }
+    return { cards, deck: deck.toJSON(), phase: 'play', lastAction: `Dealer dealt ${card.friendlyName()} to the table.` }
   }
 
   const players = state.players.map(p => p.uid === uid
@@ -106,7 +113,7 @@ export function dealOne(state, { uid, faceUp }) {
     : p
   )
   const player = players.find(p => p.uid === uid)
-  return { players, deck: deck.toJSON(), lastAction: `Dealer dealt ${card.friendlyName()} to ${player.name}.` }
+  return { players, deck: deck.toJSON(), phase: 'play', lastAction: `Dealer dealt ${card.friendlyName()} to ${player.name}.` }
 }
 
 export function anteRound(state, { requests, lastAction }) {
@@ -126,8 +133,9 @@ export function anteReply(state, { uid, chips }) {
     players   = _fold(state.players, uid)
     request.turn = false
   } else {
-    chipDeltas    = [{ uid, delta: -chips }]
-    request.turn  = false
+    chipDeltas = [{ uid, delta: -chips }]
+    request.turn = false
+    players = state.players.map(p => p.uid === uid ? { ...p, antePaid: (p.antePaid ?? 0) + chips } : p)
   }
 
   const allDone    = round.requests.every(r => !r.turn)
@@ -161,7 +169,7 @@ export function bettingRound(state, { startWith }) {
     return req
   })
 
-  return { round: { type: 'bet', startWith, requests }, players, bigBlind: 0, lastAction }
+  return { round: { type: 'bet', startWith, requests }, players, bigBlind: 0, phase: 'play', lastAction }
 }
 
 // Returns { tableUpdates, chipDeltas }
@@ -229,7 +237,7 @@ export function passingRound(state, { cardCount, stepCount }) {
       turn: true, passed: [],
     }
   })
-  return { round: { type: 'pass', requests }, lastAction: 'Dealer called a card passing round.' }
+  return { round: { type: 'pass', requests }, phase: 'play', lastAction: 'Dealer called a card passing round.' }
 }
 
 export function passingReply(state, { uid, pass }) {
@@ -263,7 +271,7 @@ export function declareRound(state, { options }) {
     message: `Declare: ${label}`,
     turn: true,
   }))
-  return { round: { type: 'declare', requests }, lastAction: 'Dealer called a declaration round.' }
+  return { round: { type: 'declare', requests }, phase: 'play', lastAction: 'Dealer called a declaration round.' }
 }
 
 export function declareReply(state, { uid, option }) {
@@ -319,13 +327,13 @@ export function reroll(state) {
       if (c.suit === 'dice') { Card.rerollDie(c); c.faceUp = false }
     })
   })
-  return { players, lastAction: 'Dealer hid and re-rolled all dice.' }
+  return { players, phase: 'play', lastAction: 'Dealer hid and re-rolled all dice.' }
 }
 
 export function revealAndCount(state) {
   const players = structuredClone(state.players)
   players.forEach(player => player.cards.forEach(c => { c.faceUp = true }))
-  return { players, lastAction: 'show-dice-counts' }
+  return { players, phase: 'play', lastAction: 'show-dice-counts' }
 }
 
 export function johnnyDrama(state) {

@@ -31,7 +31,7 @@ export async function createTable(name, creatorUid) {
   const doc = serialize({
     name, gameOn: false, gameName: '', diceGame: false,
     pot: 0, dealer: creatorUid, button: creatorUid, bigBlind: 0,
-    lastAction: '', players: [], deck: [], cards: [], round: null,
+    lastAction: '', players: [], deck: [], cards: [], round: null, phase: null,
     hasPassing: false, hasHiLo: false, hasHiLoBoth: false, allowBuyIn: false,
   })
   return databases.createDocument(DB_ID, TABLES_COLLECTION, 'unique()', doc)
@@ -142,6 +142,10 @@ export const TableMutations = {
   endGame:        (tableId, params, winnerChipMap) => applyMutationWithChips(tableId, s => ({
     tableUpdates: M.endGame(s, params),
     chipDeltas:   Object.values(winnerChipMap).map(w => ({ uid: w.uid, delta: w.winnings })),
+  })),
+  cancelGame:     (tableId, lastAction) => applyMutationWithChips(tableId, s => ({
+    tableUpdates: M.cancelGame(s, { lastAction }),
+    chipDeltas:   s.players.filter(p => p.antePaid > 0).map(p => ({ uid: p.uid, delta: p.antePaid })),
   })),
   massDeal:       (tableId, params) => applyMutation(tableId, s => M.massDeal(s, params)),
   dealOne:        (tableId, params) => applyMutation(tableId, s => M.dealOne(s, params)),

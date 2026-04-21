@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  playerEnter, playerLeave, startGame, endGame,
+  playerEnter, playerLeave, startGame, endGame, cancelGame,
   anteRound, anteReply, bettingRound, bettingReply,
   passingRound, passingReply, declareRound, declareReply,
   fold, discard, reveal, revealAll,
@@ -469,5 +469,113 @@ describe('revealAll', () => {
     const r = revealAll(s, { uid: 'p1' })
     const p1 = r.players.find(p => p.uid === 'p1')
     expect(p1.cards.every(c => c.faceUp)).toBe(true)
+  })
+})
+
+// ── phase tracking ────────────────────────────────────────────────────────────
+
+describe('phase field', () => {
+  it('startGame sets phase to ante', () => {
+    const s = threePlayerState()
+    const r = startGame(s, { gameName: 'Test', pattern: '' })
+    expect(r.phase).toBe('ante')
+  })
+
+  it('bettingRound advances phase to play', () => {
+    const s = threePlayerState({ gameOn: true, phase: 'ante' })
+    const r = bettingRound(s, { startWith: 'p1' })
+    expect(r.phase).toBe('play')
+  })
+
+  it('passingRound advances phase to play', () => {
+    const s = threePlayerState({ gameOn: true, phase: 'ante' })
+    const r = passingRound(s, { cardCount: 1, stepCount: 1 })
+    expect(r.phase).toBe('play')
+  })
+
+  it('declareRound advances phase to play', () => {
+    const s = threePlayerState({ gameOn: true, phase: 'ante' })
+    const r = declareRound(s, { options: ['high', 'low'] })
+    expect(r.phase).toBe('play')
+  })
+})
+
+// ── anteReply antePaid tracking ───────────────────────────────────────────────
+
+describe('anteReply antePaid', () => {
+  function anteState() {
+    return threePlayerState({
+      pot: 0,
+      round: {
+        type: 'ante',
+        requests: [
+          { uid: 'p1', chips: 5, turn: true },
+          { uid: 'p2', chips: 5, turn: true },
+        ],
+      },
+    })
+  }
+
+  it('records antePaid on player when they ante', () => {
+    const { tableUpdates } = anteReply(anteState(), { uid: 'p1', chips: 5 })
+    const p1 = tableUpdates.players.find(p => p.uid === 'p1')
+    expect(p1.antePaid).toBe(5)
+  })
+
+  it('does not set antePaid when player folds', () => {
+    const { tableUpdates } = anteReply(anteState(), { uid: 'p1', chips: 'fold' })
+    const p1 = tableUpdates.players.find(p => p.uid === 'p1')
+    expect(p1?.antePaid ?? 0).toBe(0)
+  })
+})
+
+// ── cancelGame ────────────────────────────────────────────────────────────────
+
+describe('cancelGame', () => {
+  it('resets game state and clears cards', () => {
+    const card = { rank: 'A', suit: 'S', deckId: 'x', faceUp: true }
+    const s = threePlayerState({
+      gameOn: true, pot: 15, phase: 'ante',
+      players: [
+        { uid: 'p1', name: 'Alice', cards: [card], folded: false, betCredit: 0, antePaid: 5 },
+        { uid: 'p2', name: 'Bob',   cards: [],     folded: false, betCredit: 0, antePaid: 5 },
+        { uid: 'p3', name: 'Carol', cards: [],     folded: false, betCredit: 0, antePaid: 5 },
+      ],
+    })
+    const r = cancelGame(s, { lastAction: 'Game cancelled.' })
+    expect(r.gameOn).toBe(false)
+    expect(r.pot).toBe(0)
+    expect(r.round).toBeNull()
+    expect(r.phase).toBeNull()
+    expect(r.cards).toEqual([])
+    expect(r.players.every(p => p.cards.length === 0)).toBe(true)
+    expect(r.players.every(p => p.antePaid === 0)).toBe(true)
+  })
+
+  it('does not advance the button', () => {
+    const s = threePlayerState({ gameOn: true, phase: 'ante', button: 'p1' })
+    const r = cancelGame(s, { lastAction: '' })
+    expect(r.button).toBeUndefined()
+  })
+})
+
+// ── endGame card clearing ─────────────────────────────────────────────────────
+
+describe('endGame card clearing', () => {
+  it('clears player cards and table cards', () => {
+    const card = { rank: 'K', suit: 'H', deckId: 'x', faceUp: true }
+    const s = threePlayerState({
+      gameOn: true, pot: 50, phase: 'play',
+      players: [
+        { uid: 'p1', name: 'Alice', cards: [card], folded: false, betCredit: 0, antePaid: 0 },
+        { uid: 'p2', name: 'Bob',   cards: [card], folded: false, betCredit: 0, antePaid: 0 },
+        { uid: 'p3', name: 'Carol', cards: [card], folded: false, betCredit: 0, antePaid: 0 },
+      ],
+      cards: [card],
+    })
+    const r = endGame(s, { lastAction: 'Alice wins.' })
+    expect(r.cards).toEqual([])
+    expect(r.players.every(p => p.cards.length === 0)).toBe(true)
+    expect(r.phase).toBeNull()
   })
 })
