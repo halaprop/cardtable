@@ -67,6 +67,7 @@ export class TableView {
     const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K']
     suits.forEach(s => ranks.forEach(r => { new Image().src = `cards/${r}${s}.svg` }))
     new Image().src = 'cards/2B.svg'
+    ;['high', 'low', 'both'].forEach(r => { new Image().src = `cards/${r}declaration.svg` })
   }
 
   async _refreshUsers() {

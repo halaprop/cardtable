@@ -280,13 +280,25 @@ export function declareReply(state, { uid, option }) {
   request.turn   = false
   request.option = option
 
-  const allDone = round.requests.every(r => !r.turn)
-  if (!allDone) return { round, lastAction: state.lastAction }
+  // Add declaration card face-down; reveal all when everyone has declared
+  const declCard = { rank: option, suit: 'declaration', faceUp: false, deckId: 'decl' }
+  const allDone  = round.requests.every(r => !r.turn)
+
+  const players = state.players.map(p => {
+    if (p.uid !== uid && !allDone) return p
+    if (p.uid === uid) {
+      return { ...p, cards: [...p.cards, { ...declCard, faceUp: allDone }] }
+    }
+    // allDone: flip any declaration cards already dealt to other players
+    return { ...p, cards: p.cards.map(c => c.suit === 'declaration' ? { ...c, faceUp: true } : c) }
+  })
+
+  if (!allDone) return { round, players, lastAction: state.lastAction }
 
   const summary = round.requests
     .map(r => `${state.players.find(p => p.uid === r.uid)?.name}: ${r.option}`)
     .join(' · ')
-  return { round: null, lastAction: `Declarations — ${summary}` }
+  return { round: null, players, lastAction: `Declarations — ${summary}` }
 }
 
 export function fold(state, { uid }) {
