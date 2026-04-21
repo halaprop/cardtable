@@ -395,7 +395,7 @@ export class TableView {
         </div>
         <div style="display:flex; gap:6px; align-items:center">
           ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
-          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table">Stand Up</button>
+          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table"><span uk-icon="icon: sign-out"></span></button>
         </div>
       </div>
     `
