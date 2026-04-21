@@ -179,6 +179,14 @@ export class TableView {
       pip.textContent = hasTurn ? '●' : ''
     }
 
+    const hasButton  = player.uid === s.button
+    const dealerBadge = row.querySelector('.dealer-btn')
+    if (hasButton && !dealerBadge) {
+      pip?.insertAdjacentHTML('afterend', '<span class="uk-badge uk-margin-small-right dealer-btn" uk-tooltip="Dealer button — this player acts last">D</span>')
+    } else if (!hasButton && dealerBadge) {
+      dealerBadge.remove()
+    }
+
     const inner   = row.querySelector('.drawer-body')
     const wrapper = row.querySelector('.drawer-slide')
     if (inner && wrapper) {
@@ -427,7 +435,11 @@ export class TableView {
               ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame, 'Start a hi/lo declaration round — players can declare high, low, or both; pot splits by result') : ''}
             `}
           </div>
-          <div class="uk-flex" style="gap:6px">
+          <div class="uk-flex uk-flex-middle" style="gap:6px">
+            <span class="uk-badge dealer-btn">D</span>
+            <select id="assign-button-select" class="uk-select uk-form-small" style="width:130px" data-action="assign-button" uk-tooltip="Move the dealer button">
+              ${s.players.map(p => `<option value="${p.uid}"${p.uid === s.button ? ' selected' : ''}>${p.name}</option>`).join('')}
+            </select>
             ${b('End Game',    'end-game',    'uk-button-secondary', noGame,         'End the hand and award the pot')}
             ${b('Johnny Drama','johnny-drama','uk-button-danger',    false,          "Everyone get the f*ck out!")}
           </div>
@@ -458,6 +470,8 @@ export class TableView {
           <button class="uk-button uk-button-primary uk-button-small" data-action="pass-round-go">Go</button>
           <button class="uk-button uk-button-default uk-button-small" data-action="pass-round-cancel">Cancel</button>
         </div>
+
+
       </div>
     `
   }
@@ -497,6 +511,13 @@ export class TableView {
       const toggleEl = e.target.closest('[data-toggle-uid]')
       if (toggleEl?.dataset.toggleUid) {
         this._toggleDrawer(toggleEl.dataset.toggleUid)
+      }
+    })
+
+    this.root.addEventListener('change', e => {
+      const el = e.target.closest('[data-action]')
+      if (el?.dataset.action === 'assign-button') {
+        this._mutate(() => TableMutations.moveDealerButton(this.tableId, { uid: el.value }))
       }
     })
   }
@@ -582,8 +603,8 @@ export class TableView {
         break
 
       // Dealer actions
-      case 'new-game':    return this._showNewGameDialog()
-      case 'end-game':    return this._showEndGameDialog()
+      case 'new-game':       return this._showNewGameDialog()
+      case 'end-game':       return this._showEndGameDialog()
       case 'deal-down':
       case 'deal-up':
         return this._mutate(() => TableMutations.dealOne(this.tableId, { uid: btn.dataset.dealUid, faceUp: action === 'deal-up' }))

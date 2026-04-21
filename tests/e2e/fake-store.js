@@ -50,7 +50,7 @@ export const TableMutations = {
   playerEnter:      _noop('playerEnter'),
   playerLeave:      _noop('playerLeave'),
   appoint:          _noop('appoint'),
-  moveDealerButton: _noop('moveDealerButton'),
+  moveDealerButton: _simple('moveDealerButton', M.moveDealerButton),
   startGame:        _simple('startGame',        M.startGame),
   endGame:          (tableId, params, _winnerChipMap) => {
     _mutations.push({ name: 'endGame', tableId, params })
