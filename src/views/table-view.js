@@ -152,8 +152,9 @@ export class TableView {
       cardContainer.querySelectorAll('.card-slot').forEach(slot => {
         if (slot.style.width === '0px') slot.remove()
       })
+      const playCards = player.cards.filter(c => c.suit !== 'declaration')
       const imgs = [...cardContainer.querySelectorAll('.card-slot .card-thumb')]
-      player.cards.forEach((card, i) => {
+      playCards.forEach((card, i) => {
         const img = imgs[i]
         if (!img) return
         const showFace = card.faceUp || isMe
@@ -169,10 +170,10 @@ export class TableView {
         img.classList.toggle('card-thumb-public',  card.faceUp)
       })
       // Remove extra cards, add new ones
-      imgs.slice(player.cards.length).forEach(el => el.remove())
-      if (player.cards.length > imgs.length) {
+      imgs.slice(playCards.length).forEach(el => el.remove())
+      if (playCards.length > imgs.length) {
         if (imgs.length === 0) cardContainer.innerHTML = ''
-        player.cards.slice(imgs.length).forEach((card, i) => {
+        playCards.slice(imgs.length).forEach((card, i) => {
           cardContainer.insertAdjacentHTML('beforeend',
             this._cardHTML(player.uid, card, imgs.length + i, isMe))
           cardContainer.lastElementChild.classList.add('card-arriving')
@@ -312,8 +313,9 @@ export class TableView {
   }
 
   _cardsHTML(uid, cards, isMe) {
-    const inner = cards?.length
-      ? cards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')
+    const playCards = (cards ?? []).filter(c => c.suit !== 'declaration')
+    const inner = playCards.length
+      ? playCards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')
       : '<span class="uk-text-muted uk-text-small">no cards</span>'
     return `<span class="player-cards">${inner}</span>`
   }
@@ -618,7 +620,7 @@ export class TableView {
 
       // Dealer actions
       case 'new-game':       return this._showNewGameDialog()
-      case 'end-game':       return this.state.phase === 'ante' ? this._showCancelGameDialog() : this._showEndGameDialog()
+      case 'end-game':       return this.state.round?.type === 'ante' ? this._showCancelGameDialog() : this._showEndGameDialog()
       case 'deal-down':
       case 'deal-up':
         return this._mutate(() => TableMutations.dealOne(this.tableId, { uid: btn.dataset.dealUid, faceUp: action === 'deal-up' }))
