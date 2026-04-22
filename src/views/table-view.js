@@ -106,10 +106,19 @@ export class TableView {
     }
 
     // Patch — update only what changed without rebuilding cards
-    const tableCardSig = JSON.stringify(s.cards) + s.lastAction + s.pot + s.round?.type
+    const tableCardSig = JSON.stringify(s.cards) + s.lastAction + s.round?.type
     if (tableCardSig !== this._lastTableCardSig) {
       this._lastTableCardSig = tableCardSig
+      const oldPot = Number(this.root.querySelector('.pot-badge')?.textContent)
       this.root.querySelector('.table-info-card').outerHTML = this._tableInfoHTML(s)
+      const potBadge = this.root.querySelector('.pot-badge')
+      if (potBadge) this._showDelta(potBadge, s.pot, oldPot)
+    } else {
+      const potBadge = this.root.querySelector('.pot-badge')
+      if (potBadge) {
+        this._showDelta(potBadge, s.pot)
+        potBadge.textContent = s.pot
+      }
     }
 
     s.players.forEach(player => {
@@ -172,7 +181,11 @@ export class TableView {
     }
 
     const chipBadge = row.querySelector('.chip-badge')
-    if (chipBadge) chipBadge.textContent = this.users[player.uid]?.chips ?? '?'
+    if (chipBadge) {
+      const newChips = this.users[player.uid]?.chips ?? '?'
+      this._showDelta(chipBadge, newChips)
+      chipBadge.textContent = newChips
+    }
 
     const pip = row.querySelector('.turn-pip, .turn-pip-empty')
     if (pip) {
@@ -232,8 +245,8 @@ export class TableView {
             <span class="uk-text-large uk-text-bold" style="color:#fff">${s.name}</span>
             <span class="uk-text-muted uk-margin-small-left">${gameLine}</span>
           </div>
-          <div style="color:#fff">
-            Pot: <strong>${s.pot}</strong>
+          <div class="uk-flex uk-flex-middle">
+            <span class="uk-badge chip-badge pot-badge">${s.pot}</span>
           </div>
         </div>
         <div class="uk-text-small uk-text-muted uk-margin-small-top last-action">${s.lastAction === 'show-dice-counts' ? '' : (s.lastAction || '')}</div>
@@ -944,6 +957,18 @@ export class TableView {
         </span>
       `).join('')}
     </div>`
+  }
+
+  _showDelta(badgeEl, newVal, oldVal = Number(badgeEl.textContent)) {
+    if (isNaN(oldVal) || isNaN(Number(newVal))) return
+    const delta = Number(newVal) - oldVal
+    if (delta === 0) return
+    const existing = badgeEl.previousElementSibling
+    if (existing?.classList.contains('chip-delta')) existing.remove()
+    const el = document.createElement('span')
+    el.className = `chip-delta ${delta > 0 ? 'chip-delta-pos' : 'chip-delta-neg'}`
+    el.textContent = delta > 0 ? `+${delta}` : `${delta}`
+    badgeEl.parentElement.insertBefore(el, badgeEl)
   }
 
   _cardFileName(card) {
