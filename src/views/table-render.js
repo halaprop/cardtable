@@ -167,10 +167,7 @@ export function userActionsHTML(player, state, selectedCards) {
         <button class="uk-button uk-button-default uk-button-small" data-action="reveal" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Reveal Selected</button>
         <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
       </div>
-      <div style="display:flex; gap:6px; align-items:center">
-        ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
-        <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table"><span uk-icon="icon: sign-out"></span></button>
-      </div>
+      ${canBuy ? `<div style="display:flex; gap:6px; align-items:center"><button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button></div>` : ''}
     </div>
   `
 }
@@ -248,6 +245,7 @@ export function dealerControlsHTML(s) {
           </select>
           ${b('End Game',    'end-game',    'uk-button-secondary', noGame,         'End the hand and award the pot')}
           ${b('Johnny Drama','johnny-drama','uk-button-danger',    false,          "Everyone get the f*ck out!")}
+          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${s.dealer}" uk-tooltip="Leave the table"><span uk-icon="icon: sign-out"></span></button>
         </div>
       </div>
 
@@ -282,10 +280,11 @@ export function dealerControlsHTML(s) {
   `
 }
 
-export function playerControlsHTML() {
+export function playerControlsHTML(uid) {
   return `
-    <div class="uk-margin-top">
+    <div class="uk-margin-top uk-flex uk-flex-middle" style="gap:6px">
       <button class="uk-button uk-button-secondary uk-button-small" data-action="usurp">I'm the captain now...</button>
+      <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${uid}" uk-tooltip="Leave the table"><span uk-icon="icon: sign-out"></span></button>
     </div>
   `
 }

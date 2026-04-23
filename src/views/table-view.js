@@ -111,7 +111,7 @@ export class TableView {
             return playerHTML(p, s, { isMe, hasTurn, isMyTurn, isExpanded, chips, selectedCards, userIsDealer })
           }).join('')}
         </div>
-        ${userIsDealer ? dealerControlsHTML(s) : playerControlsHTML()}
+        ${userIsDealer ? dealerControlsHTML(s) : playerControlsHTML(this.user.$id)}
       `
       return
     }
