@@ -1,6 +1,12 @@
-import { TableMutations, subscribeTable, subscribeUsers, getUser, listUsers, buyChips } from '../store.js'
-import { calcDiceSplits, calcCardSplits, buildWinnerChipMap } from '../model/endgame.js'
+import { TableMutations, subscribeTable, subscribeUsers, listUsers } from '../store.js'
 import { Debug } from '../debug.js'
+import {
+  cardFileName, cardHTML, tableInfoHTML, playerHTML, roundActionsHTML, userActionsHTML,
+  dealerControlsHTML, playerControlsHTML,
+} from './table-render.js'
+import {
+  showNewGameDialog, showBuyChipsDialog, showCancelGameDialog, showEndGameDialog,
+} from './table-dialogs.js'
 
 export class TableView {
   constructor(el, app) {
@@ -11,10 +17,10 @@ export class TableView {
     this.tableId  = null
     this.user     = null
     this.state    = null
-    this.users    = {}      // uid -> user doc (for chip counts)
+    this.users    = {}
 
-    this._expandedUids  = new Set()   // user-opened drawers
-    this._selectedCards = {}          // uid -> Set of card indices
+    this._expandedUids  = new Set()
+    this._selectedCards = {}
     this._unsubscribe   = null
 
     this._wireEvents()
@@ -38,15 +44,12 @@ export class TableView {
       this.state     = state
       this.app.state = state
       this._refreshUsers().then(() => this._render())
-      // Re-fetch chips after a short delay to catch concurrent chip-delta writes
-      // (ante/bet chip updates race with the table subscription firing)
       setTimeout(() => this._refreshUsers().then(() => this._render()), 1500)
       Debug.refresh()
     }
 
     this._unsubscribe = subscribeTable(tableId, onState)
 
-    // Fetch initial state immediately — subscription only fires on changes
     const initial = await TableMutations.playerEnter(tableId, { uid: user.$id, name: user.name })
     if (initial) onState(initial)
   }
@@ -83,7 +86,9 @@ export class TableView {
     const s = this.state
     if (!s) return
 
-    // Full render on first load or player list change
+    const userIsDealer   = this._isDealer()
+    const selectedCards  = this._selectedCards
+
     const playerList = this.root.querySelector('#player-list')
     const renderedUids = playerList
       ? [...playerList.querySelectorAll('.player-row')].map(el => el.dataset.uid)
@@ -93,24 +98,29 @@ export class TableView {
       && currentUids.every((uid, i) => uid === renderedUids[i])
 
     if (!samePlayerSet) {
-      // Full rebuild — player list changed
       this._lastTableCardSig = null
       this.root.innerHTML = `
-        ${this._tableInfoHTML(s)}
+        ${tableInfoHTML(s, userIsDealer, selectedCards)}
         <div id="player-list" class="uk-margin-small-top">
-          ${s.players.map(p => this._playerHTML(p, s)).join('')}
+          ${s.players.map(p => {
+            const isMe      = p.uid === this.user.$id
+            const hasTurn   = this._hasPendingTurn(p, s)
+            const isMyTurn  = hasTurn && isMe
+            const isExpanded = isMyTurn || this._expandedUids.has(p.uid)
+            const chips     = this.users[p.uid]?.chips ?? '?'
+            return playerHTML(p, s, { isMe, hasTurn, isMyTurn, isExpanded, chips, selectedCards, userIsDealer })
+          }).join('')}
         </div>
-        ${this._isDealer() ? this._dealerControlsHTML(s) : this._playerControlsHTML()}
+        ${userIsDealer ? dealerControlsHTML(s) : playerControlsHTML()}
       `
       return
     }
 
-    // Patch — update only what changed without rebuilding cards
     const tableCardSig = JSON.stringify(s.cards) + s.lastAction + s.round?.type
     if (tableCardSig !== this._lastTableCardSig) {
       this._lastTableCardSig = tableCardSig
       const oldPot = Number(this.root.querySelector('.pot-badge')?.textContent)
-      this.root.querySelector('.table-info-card').outerHTML = this._tableInfoHTML(s)
+      this.root.querySelector('.table-info-card').outerHTML = tableInfoHTML(s, userIsDealer, selectedCards)
       const potBadge = this.root.querySelector('.pot-badge')
       if (potBadge) this._showDelta(potBadge, s.pot, oldPot)
     } else {
@@ -121,34 +131,29 @@ export class TableView {
       }
     }
 
-    s.players.forEach(player => {
-      this._patchPlayerRow(player, s)
-    })
+    s.players.forEach(player => this._patchPlayerRow(player, s))
 
     const dealerPanel = this.root.querySelector('.dealer-panel')
-    if (dealerPanel) dealerPanel.outerHTML = this._dealerControlsHTML(s)
+    if (dealerPanel) dealerPanel.outerHTML = dealerControlsHTML(s)
   }
 
   _patchPlayerRow(player, s) {
     const row = this.root.querySelector(`.player-row[data-uid="${player.uid}"]`)
     if (!row) return
 
-    const isMe       = player.uid === this.user.$id
-    const hasTurn    = this._hasPendingTurn(player, s)
-    const isMyTurn   = hasTurn && isMe
+    const isMe     = player.uid === this.user.$id
+    const hasTurn  = this._hasPendingTurn(player, s)
+    const isMyTurn = hasTurn && isMe
 
-    // Update row classes
     row.className = [
       'uk-card uk-card-body uk-padding-small uk-margin-small-bottom player-row',
-      isMe      ? 'player-row-me'   : 'player-row-other',
-      hasTurn   ? 'player-row-turn' : '',
+      isMe          ? 'player-row-me'     : 'player-row-other',
+      hasTurn       ? 'player-row-turn'   : '',
       player.folded ? 'player-row-folded' : '',
     ].filter(Boolean).join(' ')
 
-    // Patch individual cards — only update changed ones
     const cardContainer = row.querySelector('.player-cards')
     if (cardContainer) {
-      // Remove ghost slots left over from discard animations
       cardContainer.querySelectorAll('.card-slot').forEach(slot => {
         if (slot.style.width === '0px') slot.remove()
       })
@@ -159,23 +164,22 @@ export class TableView {
         if (!img) return
         const showFace = card.faceUp || isMe
         const backSrc  = card.suit === 'dice' ? 'cards/die-back.svg' : 'cards/2B.svg'
-        const newSrc   = showFace ? this._cardFileName(card) : backSrc
+        const newSrc   = showFace ? cardFileName(card) : backSrc
         if (img.src !== newSrc && !img.src.endsWith(newSrc)) img.src = newSrc
 
         img.dataset.cardIndex = i
         const selected = this._selectedCards[player.uid]?.has(i)
         img.classList.toggle('die-thumb',           card.suit === 'dice')
         img.classList.toggle('card-thumb-selected', !!selected)
-        img.classList.toggle('card-thumb-private', isMe && !card.faceUp)
-        img.classList.toggle('card-thumb-public',  card.faceUp)
+        img.classList.toggle('card-thumb-private',  isMe && !card.faceUp)
+        img.classList.toggle('card-thumb-public',   card.faceUp)
       })
-      // Remove extra cards, add new ones
       imgs.slice(playCards.length).forEach(el => el.remove())
       if (playCards.length > imgs.length) {
         if (imgs.length === 0) cardContainer.innerHTML = ''
         playCards.slice(imgs.length).forEach((card, i) => {
           cardContainer.insertAdjacentHTML('beforeend',
-            this._cardHTML(player.uid, card, imgs.length + i, isMe))
+            cardHTML(player.uid, card, imgs.length + i, isMe, this._selectedCards))
           cardContainer.lastElementChild.classList.add('card-arriving')
         })
       }
@@ -211,301 +215,24 @@ export class TableView {
       const hasWaiting      = inner.dataset.drawerMode === 'pass-waiting'
 
       if (isMyTurn && s.round) {
-        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.innerHTML = roundActionsHTML(player, s.round, s, this._selectedCards)
         inner.dataset.drawerMode = 'round'
         this._expandedUids.add(player.uid)
         requestAnimationFrame(() => wrapper.classList.add('open'))
       } else if (isCommittedPass && !hasWaiting) {
-        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.innerHTML = roundActionsHTML(player, s.round, s, this._selectedCards)
         inner.dataset.drawerMode = 'pass-waiting'
       } else if (hasRoundContent || (hasWaiting && !s.round)) {
-        // Turn ended or pass round completed — restore default UI
-        inner.innerHTML = isMe ? this._userActionsHTML(player) : ''
+        inner.innerHTML = isMe ? userActionsHTML(player, s, this._selectedCards) : ''
         inner.dataset.drawerMode = isMe ? 'user' : ''
       }
     }
   }
 
-  _dealBtns(uid) {
-    if (!this._isDealer()) return ''
-    if (uid === 'table' && this.state?.diceGame) return ''
-    const isTable = uid === 'table'
-    return `
-      <div class="deal-btns">
-        <button class="deal-btn ${isTable  ? 'deal-btn-primary' : ''}" data-action="deal-up"   data-deal-uid="${uid}" title="Deal face up">↑</button>
-        <button class="deal-btn ${!isTable ? 'deal-btn-primary' : ''}" data-action="deal-down" data-deal-uid="${uid}" title="Deal face down">↓</button>
-      </div>`
-  }
-
-  _tableInfoHTML(s) {
-    const gameLine = s.gameOn ? s.gameName : 'Waiting for game'
-    return `
-      <div class="uk-card uk-card-body uk-padding-small table-info-card">
-        <div class="uk-flex uk-flex-between uk-flex-middle">
-          <div>
-            <span class="uk-text-large uk-text-bold" style="color:#fff">${s.name}</span>
-            <span class="uk-text-muted uk-margin-small-left">${gameLine}</span>
-          </div>
-          <div class="uk-flex uk-flex-middle">
-            <span class="uk-badge chip-badge pot-badge">${s.pot}</span>
-          </div>
-        </div>
-        <div class="uk-text-small uk-text-muted uk-margin-small-top last-action">${s.lastAction === 'show-dice-counts' ? '' : (s.lastAction || '')}</div>
-        <div class="uk-flex uk-flex-middle player-row-main uk-margin-small-top">
-          <div class="player-row-left">${this._dealBtns('table')}</div>
-          <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
-            ${s.lastAction === 'show-dice-counts' ? this._diceCountsHTML(s) : (s.cards?.length ? this._cardsHTML('table', s.cards, false) : '')}
-          </div>
-          <div class="player-row-right"></div>
-        </div>
-      </div>
-    `
-  }
-
-  _playerHTML(player, s) {
-    const isMe       = player.uid === this.user.$id
-    const hasTurn    = this._hasPendingTurn(player, s)
-    const isMyTurn   = hasTurn && isMe
-    const isExpanded = isMyTurn || this._expandedUids.has(player.uid)
-    const chips      = this.users[player.uid]?.chips ?? '?'
-    const hasButton  = player.uid === s.button
-    const isDealer   = player.uid === s.dealer
-
-    const rowClass = [
-      'uk-card uk-card-body uk-padding-small uk-margin-small-bottom player-row',
-      isMe      ? 'player-row-me'   : 'player-row-other',
-      hasTurn   ? 'player-row-turn' : '',
-      player.folded ? 'player-row-folded' : '',
-    ].filter(Boolean).join(' ')
-
-    const req = s.round?.requests?.find(r => r.uid === player.uid)
-    const isCommittedPass = s.round?.type === 'pass' && req?.committedPass && isMe
-    let drawerContent = '', drawerMode = ''
-    if (isExpanded) {
-      if (isMyTurn && s.round)    { drawerContent = this._roundActionsHTML(player, s.round); drawerMode = 'round' }
-      else if (isCommittedPass)   { drawerContent = this._roundActionsHTML(player, s.round); drawerMode = 'pass-waiting' }
-      else if (isMe)              { drawerContent = this._userActionsHTML(player);            drawerMode = 'user' }
-    }
-
-    return `
-      <div class="${rowClass}" data-uid="${player.uid}">
-        <div class="uk-flex uk-flex-middle player-row-main"
-             data-toggle-uid="${isMe ? player.uid : ''}">
-          <div class="uk-flex uk-flex-middle player-row-left">
-          ${this._dealBtns(player.uid)}
-            ${hasTurn ? '<span class="turn-pip uk-margin-small-right" uk-tooltip="Your turn — open your row to act">●</span>' : '<span class="turn-pip-empty uk-margin-small-right"></span>'}
-            ${hasButton ? '<span class="uk-badge uk-margin-small-right dealer-btn" uk-tooltip="Dealer button — this player acts last">D</span>' : ''}
-            <span class="uk-text-bold player-name">${player.name}</span>
-            ${isDealer  ? '<span class="uk-text-muted uk-margin-small-left uk-text-small">(host)</span>' : ''}
-          </div>
-          <div class="uk-flex uk-flex-middle uk-flex-center player-row-center">
-            ${this._cardsHTML(player.uid, player.cards, isMe)}
-          </div>
-          <div class="uk-flex uk-flex-middle uk-flex-right player-row-right">
-            <span class="uk-badge chip-badge">${chips}</span>
-          </div>
-        </div>
-        <div class="drawer-slide ${isExpanded ? 'open' : ''}">
-          <div class="drawer-body" data-drawer-mode="${drawerMode}">${drawerContent}</div>
-        </div>
-      </div>
-    `
-  }
-
-  _cardsHTML(uid, cards, isMe) {
-    const playCards = (cards ?? []).filter(c => c.suit !== 'declaration')
-    const inner = playCards.length
-      ? playCards.map((card, i) => this._cardHTML(uid, card, i, isMe)).join('')
-      : '<span class="uk-text-muted uk-text-small">no cards</span>'
-    return `<span class="player-cards">${inner}</span>`
-  }
-
-  _cardHTML(uid, card, i, isMe) {
-    const selected  = this._selectedCards[uid] ?? new Set()
-    const showFace  = card.faceUp || isMe
-    const backSrc   = card.suit === 'dice' ? 'cards/die-back.svg' : 'cards/2B.svg'
-    const src       = showFace ? this._cardFileName(card) : backSrc
-    const selClass  = isMe && selected.has(i) ? 'card-thumb-selected' : ''
-    const visClass  = isMe && !card.faceUp ? 'card-thumb-private' : card.faceUp ? 'card-thumb-public' : ''
-    const dataAttr  = isMe ? `data-card-uid="${uid}" data-card-index="${i}"` : ''
-    const title     = card.faceUp ? this._friendlyName(card) : isMe ? `${this._friendlyName(card)} — only you can see this` : 'face down'
-    const dieClass  = card.suit === 'dice' ? 'die-thumb' : ''
-    return `<span class="card-slot"><img class="card-thumb ${dieClass} ${selClass} ${visClass}" src="${src}" ${dataAttr} title="${title}"></span>`
-  }
-
-  _roundActionsHTML(player, round) {
-    const req = round.requests?.find(r => r.uid === player.uid)
-    if (!req || !req.turn) return ''
-
-    if (round.type === 'ante') {
-      const s = this.state
-      const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
-      return `
-        <div class="drawer-text">${req.message || `Ante: ${req.chips} chips`}</div>
-        <div class="drawer-actions">
-          <button class="uk-button uk-button-default uk-button-small" data-action="ante-pay" data-uid="${player.uid}" data-chips="${req.chips}">Ante ${req.chips}</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="ante-fold" data-uid="${player.uid}">Fold</button>
-          ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
-        </div>
-      `
-    }
-
-    if (round.type === 'bet') {
-      const chips = req.chips
-      return `
-        <div class="drawer-text">${req.message || 'Your bet'}</div>
-        <div class="drawer-actions">
-          <input id="bet-input" class="uk-input uk-form-small uk-width-small" type="number" min="${chips}" value="${chips}" placeholder="chips">
-          <button class="uk-button uk-button-default uk-button-small" data-action="bet-go" data-uid="${player.uid}" data-min="${chips}">
-            ${chips === 0 ? 'Check / Bet' : 'Call / Raise'}
-          </button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="bet-fold" data-uid="${player.uid}">Fold</button>
-        </div>
-      `
-    }
-
-    if (round.type === 'pass') {
-      if (req.committedPass) return `
-        <div class="drawer-text">Waiting for other players to pass…</div>
-        <div class="drawer-actions"></div>
-      `
-      const needed = req.cardCount
-      const sel    = this._selectedCards[player.uid]?.size ?? 0
-      return `
-        <div class="drawer-text">${req.message} (${sel}/${needed} selected)</div>
-        <div class="drawer-actions">
-          <button class="uk-button uk-button-default uk-button-small" data-action="pass-go" data-uid="${player.uid}" data-count="${needed}"
-            uk-tooltip="Pass your selected cards to the player after you"
-            ${sel !== needed ? 'disabled' : ''}>Pass</button>
-        </div>
-      `
-    }
-
-    if (round.type === 'declare') {
-      const opts = req.options ?? ['high', 'low']
-      return `
-        <div class="drawer-text">${req.message}</div>
-        <div class="drawer-actions">
-          ${opts.map(o => `
-            <button class="uk-button uk-button-default uk-button-small" data-action="declare" data-uid="${player.uid}" data-option="${o}">
-              ${o.charAt(0).toUpperCase() + o.slice(1)}
-            </button>
-          `).join('')}
-        </div>
-      `
-    }
-
-    return ''
-  }
-
-  _userActionsHTML(player) {
-    const selected = this._selectedCards[player.uid]?.size ?? 0
-    const s = this.state
-    const canBuy = !s.gameOn || s.round?.type === 'ante' || s.allowBuyIn
-    return `
-      <div class="drawer-actions" style="justify-content: space-between">
-        <div style="display:flex; gap:6px">
-          <button class="uk-button uk-button-default uk-button-small" data-action="reveal-all" data-uid="${player.uid}">Reveal All</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="reveal" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Reveal Selected</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="discard" data-uid="${player.uid}" ${selected === 0 ? 'disabled' : ''}>Discard Selected</button>
-        </div>
-        <div style="display:flex; gap:6px; align-items:center">
-          ${canBuy ? `<button class="uk-button uk-button-default uk-button-small" data-action="buy-chips" data-uid="${player.uid}">Buy Chips</button>` : ''}
-          <button class="uk-button uk-button-danger uk-button-small" data-action="stand-up" data-uid="${player.uid}" uk-tooltip="Leave the table"><span uk-icon="icon: sign-out"></span></button>
-        </div>
-      </div>
-    `
-  }
-
-  _dealerBtn(label, action, variant, disabled, tooltip = '') {
-    const tip = tooltip ? ` uk-tooltip="${tooltip}"` : ''
-    if (disabled) {
-      return `<button class="uk-button uk-button-small" data-action="${action}" data-disabled="1"
-        style="color:rgba(255,255,255,0.38);background:transparent;border:1px solid rgba(255,255,255,0.15);cursor:default"${tip}>${label}</button>`
-    }
-    if (variant === 'uk-button-default') {
-      return `<button class="uk-button ${variant} uk-button-small" data-action="${action}"
-        style="color:#fff;background:rgba(255,255,255,0.12);border-color:rgba(255,255,255,0.35)"${tip}>${label}</button>`
-    }
-    return `<button class="uk-button ${variant} uk-button-small" data-action="${action}"${tip}>${label}</button>`
-  }
-
-  _dealerControlsHTML(s) {
-    const hasPlayers = s.players.length >= 2
-    const noGame     = !s.gameOn
-    const b = this._dealerBtn.bind(this)
-
-    return `
-      <div class="uk-card uk-card-body uk-padding-small uk-margin-top dealer-panel">
-        <div class="uk-text-small uk-text-muted uk-margin-small-bottom">Dealer Controls</div>
-        <div class="uk-flex uk-flex-between" style="gap:6px">
-          <div class="uk-flex uk-flex-wrap" style="gap:6px">
-            ${b('New Game',    'new-game',    'uk-button-primary',   s.gameOn,       'Start a new hand — choose game type and other settings')}
-            ${s.diceGame ? `
-              ${b('Reroll',         'reroll',        'uk-button-default', !hasPlayers || noGame, 'Reroll all dice')}
-              ${b('Reveal & Count', 'reveal-count',  'uk-button-default', !hasPlayers || noGame, 'Flip all dice face-up and show totals')}
-            ` : `
-              ${b('Bet',         'bet-round',   'uk-button-default',   !hasPlayers || noGame, 'Start a betting round, beginning after the dealer button')}
-              ${s.hasPassing  ? b('Pass',       'pass-round',  'uk-button-default',   !hasPlayers || noGame, 'Players pass cards to the player after them — set card count and how many seats forward') : ''}
-              ${s.hasHiLo     ? b('Hi/Lo',      'declare-hl',  'uk-button-default',   !hasPlayers || noGame, 'Start a hi/lo declaration round — players secretly declare high or low; pot splits by result') : ''}
-              ${s.hasHiLoBoth ? b('Hi/Lo/Both', 'declare-hlb', 'uk-button-default',   !hasPlayers || noGame, 'Start a hi/lo declaration round — players can declare high, low, or both; pot splits by result') : ''}
-            `}
-          </div>
-          <div class="uk-flex uk-flex-middle" style="gap:6px">
-            <span class="uk-badge dealer-btn">D</span>
-            <select id="assign-button-select" class="uk-select uk-form-small" style="width:130px" data-action="assign-button" uk-tooltip="Move the dealer button">
-              ${s.players.map(p => `<option value="${p.uid}"${p.uid === s.button ? ' selected' : ''}>${p.name}</option>`).join('')}
-            </select>
-            ${b('End Game',    'end-game',    'uk-button-secondary', noGame,         'End the hand and award the pot')}
-            ${b('Johnny Drama','johnny-drama','uk-button-danger',    false,          "Everyone get the f*ck out!")}
-          </div>
-        </div>
-
-        <!-- Bet round: start-with selector -->
-        <div id="bet-round-options" class="uk-margin-small-top uk-flex uk-flex-middle" style="gap:6px" hidden>
-          <span class="uk-text-small uk-text-muted">Start with:</span>
-          <select id="bet-start-with" class="uk-select uk-form-small" style="width:160px">
-            ${(() => {
-              const unfolded = s.players.filter(p => !p.folded)
-              const btnIdx   = unfolded.findIndex(p => p.uid === s.button)
-              const start    = btnIdx === -1 ? 0 : (btnIdx + 1) % unfolded.length
-              return [...unfolded.slice(start), ...unfolded.slice(0, start)]
-                .map(p => `<option value="${p.uid}">${p.name}</option>`).join('')
-            })()}
-          </select>
-          <button class="uk-button uk-button-primary uk-button-small" data-action="bet-round-go">Go</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="bet-round-cancel">Cancel</button>
-        </div>
-
-        <!-- Pass round options -->
-        <div id="pass-round-options" class="uk-margin-small-top uk-flex uk-flex-middle" style="gap:6px" hidden>
-          <span class="uk-text-small uk-text-muted">Cards:</span>
-          <input id="pass-card-count" class="uk-input uk-form-small" style="width:50px" type="number" min="1" max="5" value="1">
-          <span class="uk-text-small uk-text-muted">Steps:</span>
-          <input id="pass-step-count" class="uk-input uk-form-small" style="width:50px" type="number" min="1" max="${s.players.length - 1}" value="1">
-          <button class="uk-button uk-button-primary uk-button-small" data-action="pass-round-go">Go</button>
-          <button class="uk-button uk-button-default uk-button-small" data-action="pass-round-cancel">Cancel</button>
-        </div>
-
-
-      </div>
-    `
-  }
-
-  _playerControlsHTML() {
-    return `
-      <div class="uk-margin-top">
-        <button class="uk-button uk-button-secondary uk-button-small" data-action="usurp">I'm the captain now...</button>
-      </div>
-    `
-  }
-
   // ── Event wiring ──────────────────────────────────────────────────────────
 
   _wireEvents() {
-    // Permanent delegated listener — attached once in constructor
     this.root.addEventListener('click', e => {
-      // Card selection — update class directly, no full re-render
       const cardEl = e.target.closest('[data-card-uid]')
       if (cardEl) {
         const uid   = cardEl.dataset.cardUid
@@ -513,17 +240,13 @@ export class TableView {
         this._toggleCardSelection(uid, index)
         const selected = this._selectedCards[uid]?.has(index)
         cardEl.classList.toggle('card-thumb-selected', selected)
-        // Refresh drawer buttons that depend on selection count (enable/disable)
         this._refreshDrawerButtons(uid)
         return
       }
 
-      // Action buttons — checked before row toggle so deal buttons inside the
-      // logged-in player's row-main (which carries data-toggle-uid) fire correctly.
       const btn = e.target.closest('[data-action]')
       if (btn && !btn.dataset.disabled) { this._handleAction(btn); return }
 
-      // Row toggle — insert/remove drawer without full re-render
       const toggleEl = e.target.closest('[data-toggle-uid]')
       if (toggleEl?.dataset.toggleUid) {
         this._toggleDrawer(toggleEl.dataset.toggleUid)
@@ -618,7 +341,6 @@ export class TableView {
           return this._mutate(() => TableMutations.appoint(this.tableId, { uid: this.user.$id }))
         break
 
-      // Dealer actions
       case 'new-game':       return this._showNewGameDialog()
       case 'end-game':       return this.state.round?.type === 'ante' ? this._showCancelGameDialog() : this._showEndGameDialog()
       case 'deal-down':
@@ -663,208 +385,23 @@ export class TableView {
   // ── Dialogs ───────────────────────────────────────────────────────────────
 
   _showNewGameDialog() {
-    const modal     = UIkit.modal('#modal-new-game')
-    const diceEl    = document.getElementById('ng-dice')
-    const rtSection = document.getElementById('ng-round-types')
-
-    const syncDice = () => { rtSection.hidden = diceEl.checked }
-    diceEl.addEventListener('change', syncDice)
-    syncDice()
-
-    const anteSection  = document.getElementById('ng-ante-section')
-    const blindSection = document.getElementById('ng-blind-section')
-    const syncMode = () => {
-      const mode = document.querySelector('input[name="ng-ante-mode"]:checked')?.value ?? 'none'
-      anteSection.hidden  = mode !== 'ante'
-      blindSection.hidden = mode !== 'blind'
-    }
-    document.querySelectorAll('input[name="ng-ante-mode"]').forEach(r => r.addEventListener('change', syncMode))
-    syncMode()
-
-    const submit = document.getElementById('ng-submit')
-    const handler = () => {
-      const name     = document.getElementById('ng-name').value.trim() || 'Five Card Draw'
-      const pattern  = document.getElementById('ng-pattern').value.trim()
-      const diceGame    = diceEl.checked
-      const hasPassing  = !diceGame && document.getElementById('ng-pass').checked
-      const hasHiLo     = !diceGame && document.getElementById('ng-hilo').checked
-      const hasHiLoBoth = !diceGame && document.getElementById('ng-hilob').checked
-      const allowBuyIn  = document.getElementById('ng-buyin').checked
-      const anteMode    = document.querySelector('input[name="ng-ante-mode"]:checked')?.value ?? 'none'
-      const players     = this.state.players.filter(p => !p.folded)
-      const requests    = this._buildAnteRequests(anteMode, players)
-      modal.hide()
-      submit.removeEventListener('click', handler)
-      diceEl.removeEventListener('change', syncDice)
-      document.querySelectorAll('input[name="ng-ante-mode"]').forEach(r => r.removeEventListener('change', syncMode))
-      this._mutate(() => TableMutations.startGame(this.tableId, {
-        gameName: name, pattern, diceGame, hasPassing, hasHiLo, hasHiLoBoth, allowBuyIn,
-        button: this.state.button, requests,
-      }))
-    }
-    submit.addEventListener('click', handler)
-    modal.show()
-  }
-
-  _buildAnteRequests(mode, players) {
-    if (mode === 'ante') {
-      const chips = +document.getElementById('ng-ante-amount').value
-      if (!chips) return []
-      return players.map(p => ({ uid: p.uid, chips, message: `Ante: ${chips} chips` }))
-    }
-    if (mode === 'blind') {
-      const small = +document.getElementById('ng-small-blind').value
-      const big   = +document.getElementById('ng-big-blind').value
-      if (!small || !big) return []
-      const buttonIdx  = players.findIndex(p => p.uid === this.state.button)
-      const nextIdx    = i => (i + 1) % players.length
-      const smallPlayer = players[nextIdx(buttonIdx)]
-      const bigPlayer   = players[nextIdx(nextIdx(buttonIdx))]
-      return [
-        { uid: smallPlayer.uid, chips: small, message: `Small blind: ${small} chips` },
-        { uid: bigPlayer.uid,   chips: big,   message: `Big blind: ${big} chips`, bigBlind: true },
-      ]
-    }
-    return []
+    showNewGameDialog({ tableId: this.tableId, state: this.state, mutate: fn => this._mutate(fn) })
   }
 
   _showBuyChipsDialog(uid) {
-    const modal  = UIkit.modal('#modal-buy-chips')
-    const submit = document.getElementById('bc-submit')
-    const input  = document.getElementById('bc-amount')
-    input.value  = ''
-    const handler = () => {
-      const amount = +input.value
-      if (amount > 0) {
-        modal.hide()
-        submit.removeEventListener('click', handler)
-        this._mutate(() => buyChips(uid, amount).then(() => this._refreshUsers().then(() => this._render())))
-      }
-    }
-    submit.addEventListener('click', handler)
-    modal.show()
+    showBuyChipsDialog(uid, {
+      mutate:       fn => this._mutate(fn),
+      refreshUsers: ()  => this._refreshUsers(),
+      render:       ()  => this._render(),
+    })
   }
 
   _showCancelGameDialog() {
-    const gs      = this.state
-    const modal   = UIkit.modal('#modal-cancel-game')
-    const confirm = document.getElementById('cg-confirm')
-    const message = document.getElementById('cg-message')
-
-    const refundable = gs.players.filter(p => p.antePaid > 0)
-    if (refundable.length) {
-      const names = refundable.map(p => `${p.name} (${p.antePaid})`).join(', ')
-      message.textContent = `Antes will be returned: ${names}. Cards will be collected.`
-    } else {
-      message.textContent = 'Cards will be collected. No antes to return.'
-    }
-
-    confirm.addEventListener('click', () => {
-      modal.hide()
-      this._mutate(() => TableMutations.cancelGame(this.tableId, 'Game cancelled — antes returned.'))
-    }, { once: true })
-    modal.show()
+    showCancelGameDialog({ tableId: this.tableId, state: this.state, mutate: fn => this._mutate(fn) })
   }
 
   _showEndGameDialog() {
-    const gs      = this.state
-    const pot     = gs.pot
-    const players = gs.players
-
-    document.getElementById('eg-pot-label').textContent = `Pot: ${pot} chips`
-
-    const form    = document.getElementById('eg-form')
-    const preview = document.getElementById('eg-preview')
-    const modal   = UIkit.modal('#modal-end-game')
-    const submit  = document.getElementById('eg-submit')
-    const sel     = (gs.hasHiLo || gs.hasHiLoBoth) ? { w: 'split' } : {}
-
-    const places = Math.min(3, players.length)
-    const sp = gs.diceGame ? calcDiceSplits(pot, places) : calcCardSplits(pot)
-
-    const takenUids = (exceptKey) => Object.entries(sel)
-      .filter(([k, v]) => k !== exceptKey && v && v !== 'split')
-      .map(([, v]) => v)
-
-    const mkOpts = (key, includeSplit = false) => {
-      const taken = takenUids(key)
-      const available = players.filter(p => !taken.includes(p.uid))
-      const splitOpt  = includeSplit ? `<option value="split"${sel[key]==='split'?' selected':''}>— Split —</option>` : ''
-      return `<option value="">— select —</option>${splitOpt}` +
-        available.map(p => `<option value="${p.uid}"${sel[key]===p.uid?' selected':''}>${p.name}</option>`).join('')
-    }
-
-    const mkSelect = (key, includeSplit = false) =>
-      `<select class="uk-select" data-key="${key}">${mkOpts(key, includeSplit)}</select>`
-
-    const mkPreview = () => {
-      const name = uid => players.find(p => p.uid === uid)?.name ?? ''
-      if (gs.diceGame) {
-        return ['1st','2nd','3rd'].slice(0, places).filter(k => sel[k]).map(k => `${name(sel[k])} wins ${sp[k]}`).join('; ')
-      }
-      if (sel.w && sel.w !== 'split') return `${name(sel.w)} wins ${sp.w} chips`
-      if (sel.w === 'split') {
-        const parts = []
-        if (sel.h && sel.h !== 'split' && sel.l && sel.l !== 'split')
-          parts.push(`${name(sel.h)} wins high (${sp.h}), ${name(sel.l)} wins low (${sp.l})`)
-        else if (sel.h && sel.h !== 'split') parts.push(`${name(sel.h)} wins high (${sp.h})`)
-        else if (sel.l && sel.l !== 'split') parts.push(`${name(sel.l)} wins low (${sp.l})`)
-        if (sel.h === 'split' && sel.hh && sel.hl) parts.push(`${name(sel.hh)} + ${name(sel.hl)} split high (${sp.hh}/${sp.hl})`)
-        if (sel.l === 'split' && sel.lh && sel.ll) parts.push(`${name(sel.lh)} + ${name(sel.ll)} split low (${sp.lh}/${sp.ll})`)
-        return parts.join('; ')
-      }
-      return ''
-    }
-
-    const render = () => {
-      let html = ''
-      if (gs.diceGame) {
-        html = ['1st','2nd','3rd'].slice(0, places).map(k =>
-          `<div class="uk-margin"><label class="uk-form-label">${k.charAt(0).toUpperCase()+k.slice(1)} Place — ${sp[k]} chips</label>${mkSelect(k)}</div>`
-        ).join('')
-      } else {
-        html += `<div class="uk-margin"><label class="uk-form-label">Winner</label>${mkSelect('w', true)}</div>`
-        if (sel.w === 'split') {
-          html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
-            <div class="uk-width-1-2"><label class="uk-form-label">High winner</label>${mkSelect('h', true)}</div>
-            <div class="uk-width-1-2"><label class="uk-form-label">Low winner</label>${mkSelect('l', true)}</div>
-          </div>`
-          if (sel.h === 'split') html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
-            <div class="uk-width-1-2"><label class="uk-form-label">Split high — ${sp.hh}/${sp.hl} chips</label>${mkSelect('hh')}</div>
-            <div class="uk-width-1-2"><label class="uk-form-label">with</label>${mkSelect('hl')}</div>
-          </div>`
-          if (sel.l === 'split') html += `<div class="uk-grid uk-grid-small uk-margin" uk-grid>
-            <div class="uk-width-1-2"><label class="uk-form-label">Split low — ${sp.lh}/${sp.ll} chips</label>${mkSelect('lh')}</div>
-            <div class="uk-width-1-2"><label class="uk-form-label">with</label>${mkSelect('ll')}</div>
-          </div>`
-        }
-      }
-      form.innerHTML = html
-      if (preview) preview.textContent = mkPreview()
-
-      form.querySelectorAll('select[data-key]').forEach(el => {
-        el.addEventListener('change', () => {
-          const key = el.dataset.key
-          sel[key] = el.value
-          if (key === 'w') { delete sel.h; delete sel.l; delete sel.hh; delete sel.hl; delete sel.lh; delete sel.ll }
-          if (key === 'h') { delete sel.hh; delete sel.hl }
-          if (key === 'l') { delete sel.lh; delete sel.ll }
-          render()
-        })
-      })
-    }
-
-    render()
-
-    const handler = () => {
-      const winnerChipMap = buildWinnerChipMap(sel, sp, places, players, gs.diceGame)
-      if (!Object.keys(winnerChipMap).length) return
-      modal.hide()
-      submit.removeEventListener('click', handler)
-      this._mutate(() => TableMutations.endGame(this.tableId, { lastAction: mkPreview() }, winnerChipMap))
-    }
-    submit.addEventListener('click', handler)
-    modal.show()
+    showEndGameDialog({ tableId: this.tableId, state: this.state, mutate: fn => this._mutate(fn) })
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -897,21 +434,20 @@ export class TableView {
       wrapper.classList.remove('open')
       this._expandedUids.delete(uid)
     } else {
-      const player  = this.state.players.find(p => p.uid === uid)
-      const s = this.state
-      const req = s.round?.requests?.find(r => r.uid === uid)
+      const player = this.state.players.find(p => p.uid === uid)
+      const s      = this.state
+      const req    = s.round?.requests?.find(r => r.uid === uid)
       const isCommittedPass = s.round?.type === 'pass' && req?.committedPass
       if (this._isMyTurn(player, s) && s.round) {
-        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.innerHTML = roundActionsHTML(player, s.round, s, this._selectedCards)
         inner.dataset.drawerMode = 'round'
       } else if (isCommittedPass) {
-        inner.innerHTML = this._roundActionsHTML(player, s.round)
+        inner.innerHTML = roundActionsHTML(player, s.round, s, this._selectedCards)
         inner.dataset.drawerMode = 'pass-waiting'
       } else {
-        inner.innerHTML = this._userActionsHTML(player)
+        inner.innerHTML = userActionsHTML(player, s, this._selectedCards)
         inner.dataset.drawerMode = 'user'
       }
-      // One frame delay so browser registers the content before animating
       requestAnimationFrame(() => {
         wrapper.classList.add('open')
         this._expandedUids.add(uid)
@@ -927,7 +463,7 @@ export class TableView {
   }
 
   _refreshDrawerButtons(uid) {
-    const count = this._selectedCards[uid]?.size ?? 0
+    const count  = this._selectedCards[uid]?.size ?? 0
     const drawer = this.root.querySelector(`.player-row[data-uid="${uid}"] .drawer-body`)
     if (!drawer) return
     drawer.querySelectorAll('[data-action="reveal"]').forEach(b => b.disabled = count === 0)
@@ -948,19 +484,6 @@ export class TableView {
     s.has(index) ? s.delete(index) : s.add(index)
   }
 
-  _diceCountsHTML(s) {
-    const counts = { 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 }
-    s.players.forEach(p => p.cards.forEach(c => { if (c.suit === 'dice') counts[c.rank]++ }))
-    return `<div class="uk-flex uk-flex-middle" style="gap:28px">
-      ${[1,2,3,4,5,6].map(v => `
-        <span class="uk-flex uk-flex-middle" style="gap:6px">
-          <span style="color:rgba(255,255,255,0.82);font-size:1.3em;font-weight:700">${counts[v]}</span>
-          <img src="cards/die-${v}.svg" style="width:2.2em;height:2.2em">
-        </span>
-      `).join('')}
-    </div>`
-  }
-
   _showDelta(badgeEl, newVal, oldVal = Number(badgeEl.textContent)) {
     if (isNaN(oldVal) || isNaN(Number(newVal))) return
     const delta = Number(newVal) - oldVal
@@ -971,17 +494,5 @@ export class TableView {
     el.className = `chip-delta ${delta > 0 ? 'chip-delta-pos' : 'chip-delta-neg'}`
     el.textContent = delta > 0 ? `+${delta}` : `${delta}`
     badgeEl.parentElement.insertBefore(el, badgeEl)
-  }
-
-  _cardFileName(card) {
-    if (card.suit === 'dice') return `cards/die-${card.rank}.svg`
-    return `cards/${card.rank}${card.suit}.svg`
-  }
-
-  _friendlyName(card) {
-    const ranks = { A:'ace',2:'two',3:'three',4:'four',5:'five',6:'six',7:'seven',8:'eight',9:'nine',10:'ten',J:'jack',Q:'queen',K:'king' }
-    const suits = { S:'spades',H:'hearts',D:'diamonds',C:'clubs' }
-    const article = (card.rank === 'A' || card.rank === '8') ? 'an' : 'a'
-    return `${article} ${ranks[card.rank]} of ${suits[card.suit]}`
   }
 }
