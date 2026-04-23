@@ -262,7 +262,7 @@ export function dealerControlsHTML(s) {
           })()}
         </select>
         <button class="uk-button uk-button-primary uk-button-small" data-action="bet-round-go">Go</button>
-        <button class="uk-button uk-button-default uk-button-small" data-action="bet-round-cancel">Cancel</button>
+        <button class="uk-button uk-button-default uk-button-small uk-light" data-action="bet-round-cancel">Cancel</button>
       </div>
 
       <!-- Pass round options -->
@@ -272,7 +272,7 @@ export function dealerControlsHTML(s) {
         <span class="uk-text-small uk-text-muted">Steps:</span>
         <input id="pass-step-count" class="uk-input uk-form-small" style="width:50px" type="number" min="1" max="${s.players.length - 1}" value="1">
         <button class="uk-button uk-button-primary uk-button-small" data-action="pass-round-go">Go</button>
-        <button class="uk-button uk-button-default uk-button-small" data-action="pass-round-cancel">Cancel</button>
+        <button class="uk-button uk-button-default uk-button-small uk-light" data-action="pass-round-cancel">Cancel</button>
       </div>
 
 
