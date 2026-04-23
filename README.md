@@ -2,12 +2,12 @@
 
 In early 2020, COVID ended my weekly in-person card game. I built the original Card Table to keep it going online — a real-time multiplayer table where a dealer controls the game and players join from wherever they are. It supported poker variants, dice games, hi/lo declarations, split pots, and the usual dealer mechanics (antes, blinds, passing rounds, buy-ins).
 
-This is a rewrite of that original app. The original used Vue 2 and a Firebase/Firestore backend. This version keeps the same game logic — largely the same code, with some AI-assisted architectural cleanup — but swaps the stack: vanilla JS (no framework), Appwrite for auth and the database, UIKit for CSS, and proper SVG art for cards and dice.
+This is a rewrite of that original app. Same logic, but switched the Vue 2 UI out for vanilla JS. Also switched out Firestore in favor of real-time Appwrite auth and backend. Added significant unit and end-to-end tests. These and much of the CSS was done with significant AI assistance. Also added UIKit for CSS and proper SVG art for cards and dice.
 
 ## Setup
 
 1. Create an Appwrite project with two collections: `tables` and `users` (see field list below).
-2. Copy `appwrite-config.template.js` to `appwrite-config.js` and fill in your project credentials.
+2. Create `appwrite-config.js` with your project credentials (see `src/appwrite.js` and `src/store.js` for the expected exports).
 3. Serve the project root as a static site (e.g. `npx serve .`).
 
 ### Appwrite collections
