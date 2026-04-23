@@ -1,0 +1,5 @@
+export const APPWRITE_ENDPOINT   = 'https://sfo.cloud.appwrite.io/v1'
+export const APPWRITE_PROJECT_ID = '69e3bf4a000d39b4233d'
+export const DB_ID               = '69e3bf6f0038dca81af8'
+export const TABLES_COLLECTION   = 'tables'
+export const USERS_COLLECTION    = 'users'
