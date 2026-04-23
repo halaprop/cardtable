@@ -19,21 +19,30 @@ This is a rewrite of that original app. The original used Vue 2 and a Firebase/F
 ## Running tests
 
 ```bash
-npm test          # Vitest in watch mode
-npx vitest run    # Single pass
+npm test               # Run everything: unit tests + UI tests
+npm run test:unit      # Unit tests only (fast, no browser)
+npm run test:e2e       # UI tests only (Playwright, starts a server automatically)
 ```
 
-### End-to-end tests (Playwright)
-
-The Playwright suite in `tests/e2e/` exercises the full UI against an in-memory mock of Appwrite. The test runner starts a static server automatically — no manual setup needed.
+### Selective runs
 
 ```bash
-npx playwright test              # Run all E2E tests
-npx playwright test --ui         # Interactive UI mode
-npx playwright test table.spec.js  # One file
+# Unit — single file
+npx vitest run src/model/splits.test.js
+
+# E2E — single file
+npx playwright test tests/e2e/table.spec.js
+
+# E2E — interactive UI (step through tests visually)
+npx playwright test --ui
 ```
 
-Test results (screenshots, traces) land in `test-results/` which is gitignored.
+### What the tests cover
+
+- **Unit tests** (`src/model/*.test.js`) — pure logic: mutations, split pot math, end-game calculations. Fast, no browser, no network.
+- **UI tests** (`tests/e2e/`) — full table view rendered in a real browser against an in-memory Appwrite mock. Covers rendering, round flows, card interactions, and button states.
+
+Test artifacts (screenshots, traces) land in `test-results/` which is gitignored.
 
 ## How it works
 
