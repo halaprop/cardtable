@@ -41,6 +41,11 @@ export class TableView {
     this._preloadCards()
 
     const onState = state => {
+      const newGameStarted = !this.state?.gameOn && state.gameOn
+      if (newGameStarted) {
+        this._selectedCards = {}
+        this._expandedUids  = new Set()
+      }
       this.state     = state
       this.app.state = state
       this._refreshUsers().then(() => this._render())
